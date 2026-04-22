@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Mount Molomo — Dungeon Strugglers</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=IM+Fell+English:ital@0;1&family=Spectral:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  /* Map variables — toggled by theme */
+  --map-bg:#e8d9b5;
+  --map-ink:#4a2e10;
+  --map-ink-light:#7a5a3a;
+  --zone-bg:#e8d8b0;
+  --zone-stroke:#5a3a1a;
+  --boss-bg:#f0e2cc;
+  --boss-stroke:#6a1a0a;
+  --wp-fill:#c9a84c;
+  --wp-stroke:#8a6020;
+  --path-stroke:#5a3a1a;
+  --map-text:#3a2010;
+  --map-lowlands:#c8b888;
+  /* Sidebar variables — FIXED, never toggled */
+  --panel-bg:#2f3136;
+  --panel-border:#26282c;
+  --panel-sub:#252830;
+  --panel-deep:#1e2124;
+  --panel-input:#26282c;
+  --text-bright:#e8e0d0;
+  --text-mid:#c0b8ac;
+  --text-muted:#9095a0;
+  --text-dim:#6a6f78;
+  --accent:#c9a84c;
+  --accent-dim:#8a6020;
+  --accent-muted:#b8983a22;
+  --red:#e07070;
+  --red-dim:#9a5050;
+  --green:#8acc8a;
+  --green-dim:#4a7a4a66;
+  --topbar:#1e2124;
+  --topbar-border:#2a2d31;
+}
+/* Light map mode — only map-facing variables change */
+.map-wrap.map-light { --map-bg:#1a120a; --map-ink:#c8b890; --map-ink-light:#a89870; --zone-bg:#2a1e0e; --zone-stroke:#c8b890; --boss-bg:#2e1a0c; --boss-stroke:#e8c890; --wp-fill:#e8c050; --wp-stroke:#c8a030; --path-stroke:#b09060; --map-text:#d4c4a0; --map-lowlands:#1e160a; }
+/* Note: "light" map mode is actually a dark/night parchment — rich dark brown ink on near-black */
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#111;font-family:'Spectral',Georgia,serif;}
+.app{display:flex;flex-direction:column;height:100vh;overflow:hidden;background:#1e2124;}
+.topbar{height:54px;min-height:54px;background:#1e2124;display:flex;align-items:center;justify-content:space-between;padding:0 22px;border-bottom:1px solid #2a2d31;z-index:20;}
+.topbar-left{display:flex;align-items:baseline;gap:10px;}
+.topbar-title{font-family:'Cinzel',serif;font-size:16px;font-weight:700;color:#e8e0d0;letter-spacing:0.12em;}
+.topbar-sub{font-family:'Spectral',serif;font-size:12px;color:#6a6f78;font-style:italic;}
+.topbar-right{display:flex;align-items:center;gap:12px;}
+.tier-toggle{display:flex;}
+.tier-btn{font-family:'Cinzel',serif;font-size:11.5px;letter-spacing:0.07em;padding:5px 14px;border:1px solid #3e4248;background:#26282c;color:#6a6f78;cursor:pointer;transition:all 0.15s;}
+.tier-btn:first-child{border-radius:5px 0 0 5px;}
+.tier-btn:last-child{border-radius:0 5px 5px 0;border-left:none;}
+.tier-btn.active{background:#b8983a22;border-color:#c9a84c;color:#c9a84c;}
+.theme-btn{font-family:'Cinzel',serif;font-size:11.5px;letter-spacing:0.07em;padding:5px 14px;border:1px solid #3e4248;background:#26282c;color:#9095a0;cursor:pointer;border-radius:5px;transition:all 0.15s;}
+.theme-btn:hover{border-color:#c9a84c;color:#c9a84c;}
+.topbar-badge{font-size:11.5px;font-family:'Cinzel',serif;background:#26282c;border:1px solid #c9a84c;color:#c9a84c;padding:5px 14px;border-radius:5px;letter-spacing:0.07em;}
+.main{display:flex;flex:1;overflow:hidden;}
+.map-wrap{flex:1;position:relative;overflow:hidden;background:var(--map-bg);cursor:grab;transition:background 0.4s ease;}
+.map-wrap.panning{cursor:grabbing;}
+.map-canvas{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform;}
+.map-canvas svg{display:block;}
+.zone-marker{cursor:pointer;}
+.zm-ring-outer,.zm-ring-inner,.zm-bg,.zm-dot,.zm-pulse,.zm-label{transition:all 0.2s ease;}
+.zm-label{pointer-events:none;}
+.zone-marker:hover .zm-ring-outer{opacity:0.78;}
+.zone-marker:hover .zm-ring-inner{opacity:0.95;}
+.zone-marker:hover .zm-bg{fill:var(--zone-bg);filter:brightness(1.12);}
+.zone-marker:hover .zm-label{opacity:1;}
+.zone-marker.active .zm-ring-outer{opacity:0.95;stroke-width:1.5;}
+.zone-marker.active .zm-ring-inner{opacity:1;stroke-width:2;}
+.zone-marker.active .zm-bg{fill:#d4a840;}
+.zone-marker.active .zm-dot{fill:#2a1000;}
+.zone-marker.active .zm-label{opacity:1;fill:#1a0e00;}
+.zone-marker.boss:hover .zm-bg{filter:brightness(1.08);}
+.zone-marker.boss.active .zm-bg{fill:#c8380a;}
+.zone-marker.boss.active .zm-label{opacity:1;fill:#1a0800;}
+.zone-marker.locked-zone .zm-bg{opacity:0.45;}
+.zone-marker.locked-zone .zm-ring-outer{opacity:0.12;}
+.zone-marker.locked-zone .zm-ring-inner{opacity:0.18;}
+.zone-marker.locked-zone .zm-dot{opacity:0.2;}
+.zone-marker.locked-zone .zm-label{opacity:0.25;}
+.wp-marker{cursor:pointer;}
+.wp-diamond{transition:all 0.18s ease;}
+.wp-label{pointer-events:none;transition:opacity 0.18s ease;}
+.wp-marker:hover .wp-diamond{fill:#d4a840;stroke:#2a1000;stroke-width:1.5;}
+.wp-marker:hover .wp-label{opacity:1;}
+.wp-marker.active .wp-diamond{fill:#c9a84c;stroke:#1a0e00;stroke-width:2;}
+.wp-marker.active .wp-label{opacity:1;}
+/* Map night/dark mode — deeper parchment tones, ink becomes luminous */
+.map-wrap.map-dark{background:#1a1208 !important;}
+.map-wrap.map-dark .zone-marker .zm-ring-outer{stroke:#c8b890;}
+.map-wrap.map-dark .zone-marker .zm-ring-inner{stroke:#c8b890;}
+.map-wrap.map-dark .zone-marker .zm-bg{fill:#2e200e;stroke:#c8b890;}
+.map-wrap.map-dark .zone-marker .zm-dot{fill:#e8d4a0;}
+.map-wrap.map-dark .zone-marker .zm-label{fill:#d4c090 !important;opacity:0.85 !important;}
+.map-wrap.map-dark .zone-marker.active .zm-bg{fill:#c9a84c !important;stroke:#8a6010 !important;}
+.map-wrap.map-dark .zone-marker.active .zm-dot{fill:#1a0e00 !important;}
+.map-wrap.map-dark .zone-marker.boss .zm-bg{fill:#2e1808;stroke:#e09060;}
+.map-wrap.map-dark .zone-marker.boss.active .zm-bg{fill:#d04020 !important;}
+.map-wrap.map-dark .wp-diamond{fill:#e8c050 !important;stroke:#c09030 !important;}
+
+@keyframes tooltipRise{from{opacity:0;transform:translateX(-50%) translateY(8px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
+.wp-tooltip{position:absolute;pointer-events:none;z-index:100;display:none;transform:translateX(-50%);}
+.wp-tooltip.visible{display:block;animation:tooltipRise 0.5s cubic-bezier(0.22,0.8,0.4,1) forwards;}
+.wpt-outer{position:relative;filter:drop-shadow(0 3px 10px rgba(0,0,0,0.5));}
+.wpt-box{background:var(--panel-deep);border:1.5px solid #6a5430;border-radius:6px;padding:11px 14px 10px;min-width:192px;max-width:215px;position:relative;}
+.wpt-tail{width:20px;height:10px;display:block;margin:0 auto;overflow:visible;}
+.wpt-title{font-family:'Cinzel',serif;font-size:13px;font-weight:700;color:#d4b86a;letter-spacing:0.07em;margin-bottom:5px;line-height:1.3;}
+.wpt-text{font-family:'Spectral',serif;font-size:12.5px;color:#b0a888;font-style:italic;line-height:1.6;margin-bottom:7px;}
+.wpt-flourish{text-align:right;font-size:14px;color:#6a5430;opacity:0.85;line-height:1;}
+
+.side-panel{width:366px;min-width:366px;background:var(--panel-bg);display:flex;flex-direction:column;overflow:hidden;border-left:1px solid var(--panel-border);}
+.panel-scroll{flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--panel-border) var(--panel-bg);}
+.panel-scroll::-webkit-scrollbar{width:6px;}
+.panel-scroll::-webkit-scrollbar-track{background:var(--panel-bg);}
+.panel-scroll::-webkit-scrollbar-thumb{background:var(--panel-border);border-radius:3px;}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:translateY(0);}}
+.fade-row{opacity:0;animation:fadeUp 0.28s ease forwards;}
+@keyframes rollReveal{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+.roll-result-anim{animation:rollReveal 0.3s ease forwards;}
+
+.ph{padding:15px 22px 10px;border-bottom:1px solid var(--panel-border);}
+.ph-name{font-family:'Cinzel',serif;font-size:14px;font-weight:700;color:var(--text-bright);letter-spacing:0.08em;margin-bottom:4px;line-height:1.4;}
+.ph-type{font-family:'Spectral',serif;font-size:12px;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;}
+.ph-flavor{padding:10px 22px 12px;font-family:'Spectral',serif;font-size:14px;color:var(--text-mid);font-style:italic;line-height:1.85;border-bottom:1px solid var(--panel-border);}
+.npc-quote{padding:10px 20px 11px;border-bottom:1px solid var(--panel-border);background:var(--panel-sub);}
+.npc-text{font-family:'IM Fell English',serif;font-size:13px;color:#c8b890;font-style:italic;line-height:1.7;margin-bottom:3px;}
+[data-theme="light"] .npc-text{color:#5a3a18;}
+.npc-attr{font-family:'Spectral',serif;font-size:12px;color:var(--text-dim);}
+.class-tip{padding:8px 20px 9px;border-bottom:1px solid var(--panel-border);background:var(--panel-sub);display:flex;align-items:flex-start;gap:7px;}
+.class-tip-text{font-family:'Spectral',serif;font-size:13px;color:var(--text-muted);line-height:1.6;font-style:italic;}
+.class-tip-text strong{color:#aabb98;font-style:normal;font-weight:500;}
+[data-theme="light"] .class-tip-text strong{color:#4a6a30;}
+.roll-row{display:flex;gap:7px;padding:10px 22px;border-bottom:1px solid var(--panel-border);}
+.roll-btn{flex:1;padding:7px 8px;background:var(--panel-input);border:1px solid var(--panel-border);border-radius:5px;color:var(--text-mid);font-family:'Spectral',serif;font-size:13px;cursor:pointer;transition:all 0.15s;text-align:center;line-height:1.3;}
+.roll-btn:hover{background:var(--panel-sub);border-color:var(--accent);color:var(--accent);}
+.roll-btn:disabled{opacity:0.5;cursor:default;}
+.rbicon{display:block;font-size:14px;margin-bottom:1px;}
+.rr{padding:6px 22px 8px;}
+.rr-inner{padding:9px 12px;background:var(--panel-input);border-radius:4px;border:1px solid var(--panel-border);}
+.rr-label{font-size:11px;color:var(--text-muted);font-family:'Cinzel',serif;letter-spacing:0.1em;margin-bottom:4px;}
+.rr-text{font-family:'Spectral',serif;font-size:14px;color:var(--text-bright);line-height:1.65;}
+.rr-pending{font-family:'Spectral',serif;font-size:13px;color:var(--text-dim);font-style:italic;}
+.boss-block{padding:10px 22px;border-bottom:1px solid var(--panel-border);background:var(--panel-sub);}
+.boss-name{font-family:'Cinzel',serif;font-size:12px;color:var(--red);letter-spacing:0.07em;margin-bottom:2px;}
+.boss-sub{font-family:'Spectral',serif;font-size:12px;color:var(--red-dim);}
+
+.cat-header{display:flex;align-items:center;gap:8px;padding:10px 22px;border-bottom:1px solid var(--panel-border);cursor:pointer;user-select:none;transition:background 0.12s;width:100%;}
+.cat-header:hover{background:var(--panel-sub);}
+.cat-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0;color:#c8b880;transition:color 0.15s;}
+[data-theme="light"] .cat-icon{color:#7a5a18;}
+.cat-title{font-family:'Cinzel',serif;font-size:10.5px;letter-spacing:0.15em;color:#c0b478;font-weight:600;text-transform:uppercase;flex:1;}
+[data-theme="light"] .cat-title{color:#6a4a18;}
+.cat-count{font-family:'Spectral',serif;font-size:12px;color:var(--text-dim);margin-right:6px;flex-shrink:0;}
+.cat-chevron{font-size:10px;color:var(--text-dim);transition:transform 0.18s;flex-shrink:0;}
+.cat-header.open .cat-chevron{transform:rotate(90deg);}
+.cat-header.open .cat-title{color:#d4c890;}
+.cat-header.open .cat-icon{color:#d4c890;}
+[data-theme="light"] .cat-header.open .cat-title{color:#8a5a10;}
+[data-theme="light"] .cat-header.open .cat-icon{color:#8a5a10;}
+.cat-body{display:none;border-bottom:1px solid var(--panel-border);width:100%;}
+.cat-body.open{display:block;}
+
+.item-row{display:flex;align-items:center;border-bottom:1px solid rgba(38,40,44,0.4);width:100%;}
+.item-row-btn{flex:1;display:flex;align-items:center;gap:9px;padding:8px 22px;background:none;border:none;cursor:pointer;text-align:left;transition:background 0.12s;min-width:0;width:100%;}
+.item-row-btn:hover{background:rgba(50,54,59,0.5);}
+[data-theme="light"] .item-row-btn:hover{background:rgba(200,190,170,0.4);}
+.item-thumb{width:30px;height:30px;border-radius:4px;background:var(--panel-input);border:1px solid var(--panel-border);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
+.item-info{flex:1;min-width:0;overflow:hidden;}
+.item-name{font-family:'Spectral',serif;font-size:13px;color:var(--text-bright);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;}
+.item-rar{font-family:'Spectral',serif;font-size:12px;font-style:italic;display:block;white-space:nowrap;}
+.item-chevron{font-size:10px;color:var(--text-dim);transition:transform 0.15s;flex-shrink:0;margin-left:6px;}
+.item-row.open .item-chevron{transform:rotate(90deg);}
+.item-detail{background:var(--panel-input);overflow:hidden;max-height:0;transition:max-height 0.28s ease;width:100%;}
+.item-detail.open{max-height:500px;}
+.item-detail-inner{padding:13px 22px 15px;}
+.item-img{width:100%;height:90px;background:var(--panel-deep);border-radius:5px;border:1px solid var(--panel-border);display:flex;align-items:center;justify-content:center;margin-bottom:11px;font-size:32px;opacity:0.45;}
+.item-blurb{font-family:'Spectral',serif;font-size:13px;color:var(--text-mid);line-height:1.8;font-style:italic;margin-bottom:9px;}
+.item-mechanic{font-family:'Spectral',serif;font-size:12.5px;color:#9aaa88;line-height:1.65;margin-bottom:11px;padding:8px 11px;background:var(--panel-deep);border-radius:4px;border-left:2px solid #5a7a4a;}
+[data-theme="light"] .item-mechanic{color:#3a5a28;background:var(--panel-sub);}
+.item-cta{display:flex;justify-content:flex-end;}
+.item-link{padding:5px 12px;background:var(--panel-deep);border:1px solid rgba(184,152,58,0.35);color:var(--accent);font-family:'Cinzel',serif;font-size:9px;border-radius:4px;cursor:pointer;letter-spacing:0.08em;transition:all 0.15s;}
+.item-link:hover{background:var(--accent-muted);border-color:var(--accent);}
+
+.locked-zone-wall{padding:26px 24px;text-align:center;}
+.lzw-icon{font-size:24px;color:var(--text-dim);margin-bottom:10px;}
+.lzw-title{font-family:'Cinzel',serif;font-size:15px;font-weight:700;color:#c8b870;letter-spacing:0.08em;margin-bottom:8px;}
+[data-theme="light"] .lzw-title{color:#7a5010;}
+.lzw-text{font-family:'Spectral',serif;font-size:14px;color:var(--text-muted);font-style:italic;line-height:1.75;margin-bottom:14px;}
+[data-theme="light"] .lzw-text{color:#5a4828;}
+.lzw-btn{display:block;width:100%;padding:8px 12px;background:var(--panel-input);border:1px solid var(--accent);color:var(--accent);font-family:'Cinzel',serif;font-size:10px;border-radius:4px;cursor:pointer;text-align:center;letter-spacing:0.08em;}
+
+.ov-hero{padding:16px 22px 11px;border-bottom:1px solid var(--panel-border);}
+.ov-title{font-family:'Cinzel',serif;font-size:15px;font-weight:700;color:var(--text-bright);letter-spacing:0.1em;margin-bottom:4px;}
+.ov-desc{font-family:'Spectral',serif;font-size:13px;color:var(--text-muted);line-height:1.85;font-style:italic;}
+.ov-stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px 22px;border-bottom:1px solid var(--panel-border);}
+.ov-stat{background:var(--panel-input);border-radius:5px;padding:8px 10px;}
+.ov-stat-num{font-family:'Cinzel',serif;font-size:17px;color:var(--accent);font-weight:600;line-height:1;}
+.ov-stat-lbl{font-family:'Spectral',serif;font-size:12px;color:var(--text-dim);margin-top:2px;}
+.ov-free-tag{padding:9px 22px;border-bottom:1px solid var(--panel-border);}
+.ov-free-label{font-family:'Cinzel',serif;font-size:10.5px;letter-spacing:0.13em;font-weight:600;color:#b8b098;text-transform:uppercase;margin-bottom:7px;}
+[data-theme="light"] .ov-free-label{color:#6a5028;}
+.free-badge{display:inline-block;font-family:'Spectral',serif;font-size:13px;color:#a0c890;background:rgba(122,154,106,0.12);border:1px solid rgba(122,154,106,0.3);border-radius:4px;padding:2px 8px;margin:2px;}
+[data-theme="light"] .free-badge{color:#3a6020;background:rgba(80,120,40,0.1);border-color:rgba(80,120,40,0.3);}
+.ov-cat{padding:9px 22px;border-bottom:1px solid var(--panel-border);}
+.ov-cat-label{font-family:'Cinzel',serif;font-size:10.5px;letter-spacing:0.13em;font-weight:600;color:#b8b098;text-transform:uppercase;margin-bottom:7px;}
+[data-theme="light"] .ov-cat-label{color:#6a5028;}
+.ov-pill-wrap{display:flex;flex-wrap:wrap;gap:4px;}
+.ov-pill{font-family:'Spectral',serif;font-size:12px;color:var(--text-mid);background:var(--panel-input);border:1px solid var(--panel-border);border-radius:4px;padding:2px 8px;}
+.ov-pill.locked{color:var(--text-dim);border-color:rgba(38,40,44,0.6);}
+[data-theme="light"] .ov-pill.locked{color:#9a9080;border-color:#c8c0b0;}
+
+.gate-full{margin:12px 22px 14px;padding:14px 16px;background:var(--panel-input);border-radius:6px;border:1px solid var(--panel-border);text-align:center;}
+.gate-title{font-family:'Cinzel',serif;font-size:12px;color:var(--accent);letter-spacing:0.09em;margin-bottom:6px;text-align:center;}
+.gate-text{font-family:'Spectral',serif;font-size:14px;color:var(--text-muted);font-style:italic;line-height:1.75;margin-bottom:10px;text-align:center;}
+.gate-btn{display:block;width:100%;padding:9px 12px;background:var(--panel-input);border:1px solid var(--accent);color:var(--accent);font-family:'Cinzel',serif;font-size:11px;border-radius:4px;cursor:pointer;text-align:center;letter-spacing:0.09em;transition:background 0.15s;}
+.gate-btn:hover{background:var(--accent-muted);}
+
+.wp-panel-head{padding:14px 22px 10px;border-bottom:1px solid var(--panel-border);background:var(--panel-sub);}
+.wp-panel-icon{font-size:18px;margin-bottom:6px;color:var(--accent);}
+.wp-panel-name{font-family:'Cinzel',serif;font-size:14px;font-weight:700;color:var(--text-bright);letter-spacing:0.08em;margin-bottom:3px;}
+.wp-panel-type{font-family:'Spectral',serif;font-size:12px;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;}
+.wp-panel-desc{padding:10px 22px 12px;font-family:'Spectral',serif;font-size:14px;color:var(--text-mid);font-style:italic;line-height:1.85;border-bottom:1px solid var(--panel-border);}
+.wp-event-list{padding:10px 22px;}
+.wp-event-label{font-family:'Cinzel',serif;font-size:11px;letter-spacing:0.12em;color:var(--text-muted);font-weight:600;text-transform:uppercase;margin-bottom:9px;}
+.wp-event-row{display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-bottom:1px solid rgba(38,40,44,0.3);}
+.wp-event-num{font-family:'Cinzel',serif;font-size:12px;color:#c8b880;min-width:24px;margin-top:1px;font-weight:600;}
+[data-theme="light"] .wp-event-num{color:#8a6020;}
+.wp-event-text{font-family:'Spectral',serif;font-size:14px;color:var(--text-bright);line-height:1.55;}
+.wp-check-wrap{padding:12px 22px 14px;border-top:1px solid var(--panel-border);}
+.wp-check-label{font-family:'Cinzel',serif;font-size:11px;letter-spacing:0.12em;color:var(--text-muted);font-weight:600;text-transform:uppercase;margin-bottom:9px;}
+.wp-check-row{display:flex;align-items:flex-start;gap:9px;padding:5px 0;}
+.wp-check-badge{font-family:'Cinzel',serif;font-size:10px;background:var(--green-dim);border:1px solid rgba(74,122,74,0.5);color:var(--green);padding:3px 8px;border-radius:3px;white-space:nowrap;flex-shrink:0;line-height:1.4;}
+.wp-check-text{font-family:'Spectral',serif;font-size:13px;color:var(--text-muted);font-style:italic;line-height:1.55;}
+.map-hint{position:absolute;bottom:12px;left:14px;font-family:'Spectral',serif;font-size:11px;color:#3a2a12;background:rgba(221,208,168,0.88);padding:4px 10px;border-radius:3px;pointer-events:none;transition:opacity 1.5s;}
+[data-theme="light"] .map-hint{color:#3a2a12;background:rgba(200,185,150,0.9);}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="topbar-title">Mount Molomo</span>
+      <span class="topbar-sub">— Dungeon Strugglers</span>
+    </div>
+    <div class="topbar-right">
+      <div class="tier-toggle">
+        <button class="tier-btn active" id="btn-free" onclick="setTier('free')">Free</button>
+        <button class="tier-btn" id="btn-patron" onclick="setTier('patron')">Patron</button>
+      </div>
+      <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">☾ Night Map</button>
+      <div class="topbar-badge">Preview</div>
+    </div>
+  </div>
+  <div class="main">
+    <div class="map-wrap" id="mapWrap">
+      <div class="map-canvas" id="mapCanvas">
+        <svg width="1100" height="880" viewBox="0 0 1100 880" xmlns="http://www.w3.org/2000/svg" id="mapSvg">
+          <defs>
+            <pattern id="h1" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(38)"><line x1="0" y1="0" x2="0" y2="8" stroke="#7a5a3a" stroke-width="0.35" opacity="0.15"/></pattern>
+            <pattern id="h2" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(25)"><line x1="0" y1="0" x2="0" y2="10" stroke="#7a5a3a" stroke-width="0.22" opacity="0.09"/><line x1="0" y1="0" x2="10" y2="0" stroke="#7a5a3a" stroke-width="0.22" opacity="0.09"/></pattern>
+            <filter id="ppr"><feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="1.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          </defs>
+          <rect width="1100" height="880" fill="#e8d9b5" id="mapBg"/>
+          <rect width="1100" height="880" fill="url(#h1)"/>
+          <rect width="1100" height="880" fill="url(#h2)"/>
+          <rect x="0" y="0" width="1100" height="18" fill="#c8a068" opacity="0.1"/>
+          <rect x="0" y="862" width="1100" height="18" fill="#c8a068" opacity="0.1"/>
+          <rect x="0" y="0" width="18" height="880" fill="#c8a068" opacity="0.08"/>
+          <rect x="1082" y="0" width="18" height="880" fill="#c8a068" opacity="0.08"/>
+          <path d="M 280 760 Q 380 740 480 752 Q 580 733 680 746 Q 780 728 880 741 L 880 880 L 280 880 Z" fill="#c8b888" opacity="0.25"/>
+          <text x="580" y="818" text-anchor="middle" font-family="'IM Fell English',serif" font-size="13" fill="#5a3a1a" opacity="0.26" font-style="italic" letter-spacing="3">The Ridgeback Lowlands</text>
+
+          <polygon points="548,52 448,262 648,262" fill="#c8b070" stroke="#4a2e10" stroke-width="2.2" stroke-linejoin="round"/>
+          <polygon points="548,52 445,260 494,188 548,76 602,188 651,260" fill="#b8a060"/>
+          <polygon points="548,52 536,118 544,158 548,78 552,158 560,118" fill="#d8c060" opacity="0.32"/>
+          <polygon points="548,57 537,88 559,88" fill="#eee0b8" opacity="0.55"/>
+          <path d="M 518,105 Q 532,98 540,107 Q 547,100 560,105 Q 568,98 580,103" stroke="#ddeeff" stroke-width="1.3" fill="none" opacity="0.5"/>
+          <text x="548" y="46" text-anchor="middle" font-family="'Cinzel',serif" font-size="11.5" fill="#3a2010" font-weight="700" letter-spacing="0.06em" opacity="0.8">THE FROZEN THRONE</text>
+          <polygon points="212,345 132,498 292,498" fill="#c4aa68" stroke="#4a2e10" stroke-width="1.7" stroke-linejoin="round"/>
+          <polygon points="212,345 130,496 170,428 212,364 254,428 294,496" fill="#b49858"/>
+          <polygon points="888,238 810,392 966,392" fill="#c4aa68" stroke="#4a2e10" stroke-width="1.7" stroke-linejoin="round"/>
+          <polygon points="888,238 808,390 848,322 888,258 928,322 968,390" fill="#b49858"/>
+          <polygon points="74,405 16,516 132,516" fill="#baa058" stroke="#4a2e10" stroke-width="1.4"/>
+          <polygon points="74,405 14,514 46,464 74,422 102,464 134,514" fill="#aa9050"/>
+          <polygon points="1026,358 966,470 1086,470" fill="#baa058" stroke="#4a2e10" stroke-width="1.4"/>
+          <polygon points="1026,358 964,468 996,418 1026,376 1056,418 1088,468" fill="#aa9050"/>
+          <polygon points="362,470 312,565 412,565" fill="#b89850" stroke="#4a2e10" stroke-width="1.3"/>
+          <polygon points="362,470 310,563 336,522 362,488 388,522 414,563" fill="#a88848"/>
+          <polygon points="738,448 688,543 788,543" fill="#b89850" stroke="#4a2e10" stroke-width="1.3"/>
+          <polygon points="738,448 686,541 712,500 738,466 764,500 790,541" fill="#a88848"/>
+          <polygon points="154,538 116,612 192,612" fill="#b09048" stroke="#4a2e10" stroke-width="1.2"/>
+          <polygon points="944,494 906,568 982,568" fill="#b09048" stroke="#4a2e10" stroke-width="1.2"/>
+          <polygon points="548,432 508,508 588,508" fill="#b09048" stroke="#4a2e10" stroke-width="1.2"/>
+          <polygon points="452,512 418,578 486,578" fill="#a88040" stroke="#4a2e10" stroke-width="1.1"/>
+          <polygon points="644,520 610,586 678,586" fill="#a88040" stroke="#4a2e10" stroke-width="1.1"/>
+          <polygon points="302,562 270,624 334,624" fill="#a08038" stroke="#4a2e10" stroke-width="1.1"/>
+          <polygon points="794,546 762,608 826,608" fill="#a08038" stroke="#4a2e10" stroke-width="1.1"/>
+          <polygon points="110,610 82,666 138,666" fill="#987830" stroke="#4a2e10" stroke-width="1"/>
+          <polygon points="986,570 958,626 1014,626" fill="#987830" stroke="#4a2e10" stroke-width="1"/>
+          <polygon points="500,610 474,664 526,664" fill="#987830" stroke="#4a2e10" stroke-width="1"/>
+          <polygon points="596,618 570,672 622,672" fill="#987830" stroke="#4a2e10" stroke-width="1"/>
+
+          <!-- Organic worn mountain paths between POI -->
+          <g id="pathLayer" opacity="0.55">
+            <!-- Summit to Ashveil -->
+            <path d="M 548,264 Q 510,285 460,298 Q 390,315 320,330 Q 270,340 230,360" stroke="#5a3a1a" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-dasharray="6,5" filter="url(#ppr)" opacity="0.55"/>
+            <!-- Summit to Molten Flank -->
+            <path d="M 648,270 Q 700,278 740,265 Q 800,252 848,252" stroke="#5a3a1a" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-dasharray="6,5" filter="url(#ppr)" opacity="0.55"/>
+            <!-- Ashveil to Coppervein -->
+            <path d="M 196,358 Q 200,400 196,440 Q 192,490 180,540 Q 172,560 165,578" stroke="#5a3a1a" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-dasharray="5,6" filter="url(#ppr)" opacity="0.5"/>
+            <!-- Coppervein to Emberwood -->
+            <path d="M 185,592 Q 220,605 270,614 Q 310,622 345,628" stroke="#5a3a1a" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-dasharray="5,6" filter="url(#ppr)" opacity="0.5"/>
+            <!-- Emberwood to Stonewarden -->
+            <path d="M 390,638 Q 430,648 475,660 Q 510,668 545,680" stroke="#5a3a1a" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-dasharray="5,6" filter="url(#ppr)" opacity="0.5"/>
+            <!-- Stonewarden to Ashen Hollows -->
+            <path d="M 565,695 Q 610,688 650,672 Q 690,658 720,648" stroke="#5a3a1a" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-dasharray="5,6" filter="url(#ppr)" opacity="0.5"/>
+            <!-- Ashen Hollows to Geared God -->
+            <path d="M 752,640 Q 790,620 830,595 Q 860,574 885,558" stroke="#5a3a1a" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-dasharray="5,6" filter="url(#ppr)" opacity="0.5"/>
+            <!-- Geared God to Molten Flank -->
+            <path d="M 912,532 Q 925,490 930,440 Q 934,390 930,375" stroke="#5a3a1a" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-dasharray="5,6" filter="url(#ppr)" opacity="0.5"/>
+            <!-- Ashfall Crossing waypoint path spurs -->
+            <path d="M 268,342 Q 255,338 240,342" stroke="#5a3a1a" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-dasharray="4,5" opacity="0.4"/>
+            <!-- Drowned Shaft spur -->
+            <path d="M 152,590 Q 158,582 165,578" stroke="#5a3a1a" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-dasharray="3,5" opacity="0.38"/>
+            <!-- Ember Crossing spur -->
+            <path d="M 812,476 Q 826,466 840,460" stroke="#5a3a1a" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-dasharray="3,5" opacity="0.38"/>
+          </g>
+
+          <path d="M 145,576 Q 162,561 172,566 Q 178,557 186,562 Q 194,553 202,558 Q 210,576 200,582 Q 184,589 169,585 Q 153,581 145,576 Z" fill="#5a7a3a" opacity="0.2"/>
+          <path d="M 752,698 Q 764,685 773,690 Q 779,681 787,686 Q 794,676 803,682 Q 810,700 800,706 Q 785,712 771,708 Q 758,703 752,698 Z" fill="#5a7a3a" opacity="0.18"/>
+          <path d="M 428,730 Q 440,717 449,722 Q 455,713 463,718 Q 470,708 479,714 Q 486,732 477,738 Q 462,744 448,740 Q 435,735 428,730 Z" fill="#5a7a3a" opacity="0.17"/>
+          <g opacity="0.5"><path d="M 42,50 L 54,28 L 66,50 M 54,28 L 54,66" stroke="#3a2010" stroke-width="1.5" fill="none"/><text x="54" y="79" text-anchor="middle" font-family="'Cinzel',serif" font-size="10" fill="#3a2010">N</text></g>
+          <g opacity="0.74">
+            <rect x="26" y="716" width="144" height="112" rx="3" fill="#dfd0a8" stroke="#5a3a1a" stroke-width="1"/>
+            <text x="98" y="735" text-anchor="middle" font-family="'Cinzel',serif" font-size="9" fill="#3a2010" letter-spacing="2" font-weight="600">LEGEND</text>
+            <line x1="38" y1="742" x2="158" y2="742" stroke="#5a3a1a" stroke-width="0.5" opacity="0.35"/>
+            <circle cx="48" cy="757" r="10" fill="#e8d8b0" stroke="#5a3a1a" stroke-width="1.3" opacity="0.9"/>
+            <circle cx="48" cy="757" r="5.5" fill="none" stroke="#5a3a1a" stroke-width="0.7" opacity="0.45"/>
+            <circle cx="48" cy="757" r="2" fill="#5a3a1a" opacity="0.8"/>
+            <text x="66" y="761" font-family="'IM Fell English',serif" font-size="10.5" fill="#3a2010">Zone marker</text>
+            <circle cx="48" cy="780" r="11" fill="#f0e0c0" stroke="#6a1a0a" stroke-width="1.8" opacity="0.95"/>
+            <circle cx="48" cy="780" r="17" fill="none" stroke="#6a1a0a" stroke-width="0.9" opacity="0.35"/>
+            <path d="M 45,777 L 42,783 L 48,783 Z" fill="#6a1a0a" opacity="0.85"/>
+            <text x="66" y="784" font-family="'IM Fell English',serif" font-size="10.5" fill="#3a2010">Boss temple</text>
+            <polygon points="48,795 40,803 48,811 56,803" fill="#c9a84c" stroke="#8a6020" stroke-width="1" opacity="0.85"/>
+            <text x="66" y="808" font-family="'IM Fell English',serif" font-size="10.5" fill="#3a2010">Waypoint</text>
+          </g>
+          <text x="548" y="874" text-anchor="middle" font-family="'IM Fell English',serif" font-size="10" fill="#5a3a1a" letter-spacing="4" opacity="0.34">MOUNT MOLOMO — DUNGEON STRUGGLERS</text>
+          <g id="markers"></g>
+          <g id="waypoints"></g>
+        </svg>
+      </div>
+      <div class="wp-tooltip" id="wpTooltip">
+        <div class="wpt-outer">
+          <div class="wpt-box">
+            <div class="wpt-title" id="wptTitle"></div>
+            <div class="wpt-text" id="wptText"></div>
+            <div class="wpt-flourish">❧</div>
+          </div>
+          <svg class="wpt-tail" viewBox="0 0 20 10" preserveAspectRatio="none" style="display:block;margin:0 auto;width:20px;height:10px;">
+            <polygon points="0,0 20,0 10,10" fill="var(--panel-deep)"/>
+            <polyline points="0,0 10,10 20,0" fill="none" stroke="#6a5430" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+      <div class="map-hint" id="mapHint">Drag to pan · Click a zone or waypoint · Click map to return</div>
+    </div>
+    <div class="side-panel"><div class="panel-scroll" id="panelScroll"></div></div>
+  </div>
+</div>
+<script>
+const RC={'Common':'#92bc82','Uncommon':'#5aaa8a','Rare':'#6090cc','Very Rare':'#a878cc','Legendary':'#d49030','Patron':'#c9a84c'};
+function rc(r){return RC[r]||'#9a9590';}
+const ICONS={treasure:'◈',item:'✦',spell:'✶',flora:'❧',familiar:'◎',mount:'⬡',subclass:'❋'};
+let currentTier='free',currentId=null,currentType=null;
+
+let isDark=false; // false = parchment (default), true = night map
+
+function toggleTheme(){
+  isDark=!isDark;
+  const mw=document.getElementById('mapWrap');
+  if(isDark){
+    mw.classList.add('map-dark');
+    document.getElementById('themeBtn').textContent='☀ Day Map';
+    // tint map SVG background
+    const bg=document.getElementById('mapBg');
+    if(bg){bg.setAttribute('fill','#1a1208');}
+    document.getElementById('pathLayer').setAttribute('opacity','0.75');
+  } else {
+    mw.classList.remove('map-dark');
+    document.getElementById('themeBtn').textContent='☾ Night Map';
+    const bg=document.getElementById('mapBg');
+    if(bg){bg.setAttribute('fill','#e8d9b5');}
+    document.getElementById('pathLayer').setAttribute('opacity','0.55');
+  }
+}
+
+const NPC={
+  emberwoodgrove:[{q:"The trees here don't cast shadows. Haven't since the burning.",a:"— Finn, wandering bard"},{q:"I heard the Ash Druid laughing three nights running. Not a happy laugh.",a:"— Kess, shepherd"},{q:"The Cinderphoenix doesn't attack unless you near the nest.",a:"— Maren, trail guide"}],
+  coppervein:[{q:"The ore ran out twenty years ago. Whatever's still down there didn't.",a:"— Dossa Veil, retired miner"},{q:"My brother left a lantern on peg nine. It's still lit. He isn't.",a:"— Overheard at the Ashen Flagon"},{q:"You want copper? Buy it from a merchant.",a:"— Skarran, smithwright"}],
+  ashveil:[{q:"The ash doesn't drift here. It waits.",a:"— Mira Coldthorn, courier"},{q:"You'll hear harpies before you see them. That's the only mercy.",a:"— Gareth, warden"},{q:"I've crossed Ashveil Pass six times. Seventh time I didn't go alone.",a:"— Berroc the Trader"}],
+  summit:[{q:"The cold at the top is different. It remembers you.",a:"— Elara Frostmantle, survivor"},{q:"Karreth was built to guard something. It doesn't seem to know what.",a:"— Scholar Dunwick"},{q:"Three groups went up last season. We found notes from the fourth.",a:"— Captain Vorn"}],
+  moltenflank:[{q:"The rock breathes here. Put your hand on it at midnight.",a:"— Osric, geomancer's apprentice"},{q:"Drake eggs fetch fifty gold in the city. I have three fingers to prove it.",a:"— Redda the Collector"},{q:"The Forgeborn have been looking for something. A hundred years and counting.",a:"— Unnamed pilgrim"}],
+  gearedgod:[{q:"The gears predate the kingdom. Predate the mountain, some say.",a:"— Brother Aldric, lorekeeper"},{q:"We heard it walking last night. The footsteps have a rhythm.",a:"— Ysolde, expedition log, day 4"},{q:"I translated the sigils: 'The work continues.'",a:"— Dara Voss, runewright"}],
+  ashenhollows:[{q:"Hollow places hold hollow things. Don't answer if something calls back.",a:"— Mountain folk proverb"},{q:"I found a merchant in there. Petrified mid-step. I left him.",a:"— Torren the Cautious"},{q:"The Basilisk moves slowly. That's the trap.",a:"— Scratched on a cavern wall"}],
+  stonewardenruins:[{q:"The wall still stands. I don't know what that means.",a:"— Nessa, historian"},{q:"The Warden Ghost wants you to know what happened here.",a:"— Brother Cray"},{q:"We found the vault. We closed the vault.",a:"— Survey team, archive seal 7"}]
+};
+const OV_NPC=[{q:"I've mapped forty ranges. Molomo is the only one that felt like it was mapping me back.",a:"— Cartographer Serel"},{q:"The mountain doesn't care if you're brave. It cares if you're prepared.",a:"— Captain Vorn"},{q:"Something up there is waiting. The question is whether you show up.",a:"— Unnamed oracle"}];
+function rand(a){return a[Math.floor(Math.random()*a.length)];}
+function fa(h,d){return `<div class="fade-row" style="animation-delay:${d}ms;">${h}</div>`;}
+
+const WAYPOINTS=[
+  {id:'wp1',label:'The Ashfall Crossing',type:'Waypoint',cx:280,cy:350,tooltip:'A wind-scoured ridge dusted in warm ash where travelers hear voices.',
+   desc:'A narrow ridge between Ashveil Pass and the summit approaches. The ash here falls upward for reasons no scholar has explained convincingly.',
+   events:[{n:'1–2',t:'Perception DC 13 — a half-buried pack, still clasped, still warm.'},{n:'3',t:'Combat — 1d4 Ashwing Harpies drawn by movement on the ridge.'},{n:'4',t:'Investigation DC 15 — old cairn marks a hidden hollow with 8 gp and a torn map.'},{n:'5',t:'NPC — Mira Coldthorn, courier, lost. Has information about the pass above.'},{n:'6',t:'Discovery — the ash glows faintly at night. Perception DC 12 reveals a Scorchbloom.'}],
+   checks:[{badge:'Perception DC 13',text:'Locate buried equipment in the ashfall.'},{badge:'Investigation DC 15',text:'Uncover the cairn hollow and its contents.'},{badge:'History DC 12',text:'Recall this ridge was a supply line during the Third Warden War.'}]},
+  {id:'wp2',label:'The Drowned Shaft',type:'Waypoint',cx:150,cy:598,tooltip:'A flooded mineshaft entrance. Something occasionally surfaces.',
+   desc:'One of dozens of old Coppervein access shafts, now submerged. The water is warm and slightly orange. Things move in it at depth.',
+   events:[{n:'1',t:'Combat — Copperscale Serpent surfaces, defending eggs nearby.'},{n:'2–3',t:'Investigation DC 14 — a waterproof satchel in the shaft mouth, 11 gp inside.'},{n:'4',t:'NPC — Dossa Veil, mapping old shafts. Has a side-quest.'},{n:'5',t:'Discovery — Blind Root grows here. DC 10 Nature to harvest safely.'},{n:'6',t:'Survival DC 13 — the shaft connects to a dry tunnel deeper in.'}],
+   checks:[{badge:'Investigation DC 14',text:'Find the waterproof satchel in the shaft mouth.'},{badge:'Nature DC 10',text:'Safely harvest Blind Root from waterlogged walls.'},{badge:'Survival DC 13',text:'Identify the dry tunnel and its destination.'}]},
+  {id:'wp3',label:'The Ember Crossing',type:'Waypoint',cx:820,cy:480,tooltip:'Where two lava flows cooled into a bridge. The ground rings hollow underfoot.',
+   desc:'A natural bridge of cooled lava crossing a still-active fissure. The footing is treacherous, the heat oppressive, but the view extraordinary.',
+   events:[{n:'1–2',t:'Hazard — crust gives way. DC 14 Dex save or fall 20ft (3d6 fire).'},{n:'3',t:'Combat — Lava Sprite cluster (2d4), drawn to light sources.'},{n:'4',t:'Discovery — Heatvine in the fissure cracks. DC 11 Nature to harvest.'},{n:'5',t:'Perception DC 12 — a Drake egg wedged in a lava pocket, still viable.'},{n:'6',t:'NPC — Osric the geomancer, sketching. Has a Scoria Flask to trade.'}],
+   checks:[{badge:'Dex Save DC 14',text:'Avoid falling when the crust gives way.'},{badge:'Nature DC 11',text:'Harvest Heatvine from the fissure safely.'},{badge:'Perception DC 12',text:'Spot the Drake egg in the lava pocket.'}]},
+  {id:'wp4',label:"The Warden's Last Mark",type:'Waypoint',cx:678,cy:668,tooltip:"A carved monolith at the ruins approach. The carving changes when no one is watching.",
+   desc:"A tall monolith carved with the Stonewarden sigil, predating the ruins themselves. Scholars insist the text hasn't changed. Scholars haven't looked closely enough.",
+   events:[{n:'1',t:"History DC 14 — text describes a route avoiding the Warden's patrol."},{n:'2–3',t:'NPC — Nessa the historian, studying the monolith, needs help with translation.'},{n:'4',t:'Investigation DC 16 — hollow at the base holds a Stone Sigil Token.'},{n:'5',t:'Arcana DC 13 — the monolith radiates faintly. Used as a scrying anchor.'},{n:'6',t:'Combat — Stone Sentry emerges from the ground nearby.'}],
+   checks:[{badge:'History DC 14',text:"Learn the safe route past the Warden's patrol."},{badge:'Investigation DC 16',text:'Find the hollow at the base and the token inside.'},{badge:'Arcana DC 13',text:'Identify the monolith as a scrying anchor.'}]},
+];
+
+// 50+ items spread across all zones — 6-8 per zone
+const ZONES=[
+  {id:'emberwoodgrove',label:'Emberwood Grove',type:'Enchanted Forest',cx:360,cy:630,isBoss:false,free:true,
+   classTip:'Druids, Bards, Rangers — attuned to wild and fey magic',
+   flavor:'The trees here burned once and never stopped glowing. Their sap runs warm and the birds never leave.',
+   encounters:['1–2  Emberwood Sprite swarm (2d8)','3  Blight-touched Treant (hostile)','4–5  Ash Druid hermit — may be friendly','6  Cinderphoenix nesting — territorial'],
+   lootRolls:["Ashwood Staff (Uncommon)","16 gp + crude grove map","Druid's Emberbrand, smouldering","Heartember Root — handle carefully","Glowing Seedpod (light source)","Cinderphoenix Feather (Very Rare)"],
+   content:[
+     {cat:'treasure',name:'Hollow Tree Cache',rarity:'Common',emoji:'🪙',blurb:'A weathered saddlebag wedged in a split Ashbark, left by a druid who never returned.',mechanic:'Contains 16 gp and a crude map marking two other caches deeper in the grove.',link:'View in Repository'},
+     {cat:'treasure',name:'Druid Offering Stone',rarity:'Uncommon',emoji:'🪨',blurb:'A flat stone carved with fey sigils left at the grove heart. Warm to the touch regardless of weather.',mechanic:'Creatures resting within 10ft of the stone regain 1 additional HD during a short rest.',link:'View in Repository'},
+     {cat:'item',name:'Ashwood Staff',rarity:'Uncommon',emoji:'🪄',blurb:'Cut from a tree that survived the burning. Permanently warm and never rots.',mechanic:'Druidic focus. Once per day, cast Produce Flame without expending a spell slot.',link:'View Item'},
+     {cat:'item',name:'Glowing Seedpod',rarity:'Common',emoji:'🌱',blurb:'A seed from the Emberwood that never germinated — glows with amber warmth instead.',mechanic:'Bright light 15ft, dim 30ft. Lasts 8 hours. Can be extinguished and relit.',link:'View Item'},
+     {cat:'item',name:"Druid's Emberbrand",rarity:'Rare',emoji:'🔆',blurb:'A ritual brand used by Ash Druids to mark grove boundaries. Still smoulders faintly.',mechanic:'Once per day, mark a 30ft radius as Sacred Grove. Beasts cannot enter for 1 hour.',link:'View Item'},
+     {cat:'spell',name:'Embersong',rarity:'Common',emoji:'🎵',blurb:'A cantrip passed between Ash Druids, taught to outsiders only rarely.',mechanic:'Calm a beast or fey creature with the fire subtype. Concentration, 1 minute.',link:'View Spell'},
+     {cat:'spell',name:'Phoenix Wake',rarity:'Very Rare',emoji:'🔥',blurb:'A ritual spell known only to those who have witnessed a phoenix rebirth.',mechanic:'Revive a dead creature within 1 minute of death. Both creatures take 2d8 fire damage.',link:'View Spell'},
+     {cat:'flora',name:'Cinderbloom',rarity:'Uncommon',emoji:'🌸',blurb:'Grows only in scorched soil. The petals taste of ash and warmth.',mechanic:'+1d4 fire damage to weapon attacks for 1 hour. Consumed as bonus action.',link:'View Flora'},
+     {cat:'flora',name:'Ashbark',rarity:'Common',emoji:'🌲',blurb:'Bark of trees that survived the burning, harvested without harm.',mechanic:'Burns for 4 hours with no smoke. Useful for stealth camping.',link:'View Flora'},
+     {cat:'flora',name:'Heartember Root',rarity:'Very Rare',emoji:'❤️',blurb:'Grows deep in the grove, impossible to find without knowing where to look.',mechanic:'Consumed over 7 days: regrow a lost limb or repair a permanent injury.',link:'View Flora'},
+     {cat:'familiar',name:'Glowwing Moth',rarity:'Common',emoji:'🦋',blurb:'A moth whose wings shed faint amber light at dusk.',mechanic:'Familiar. Sheds dim light 5ft radius on command.',link:'View Familiar'},
+     {cat:'familiar',name:'Ember Sprite',rarity:'Uncommon',emoji:'✨',blurb:'A tiny fey creature made of living embers. Playful but easily startled.',mechanic:'Familiar. Can pass through fire and ignite small unattended objects.',link:'View Familiar'},
+     {cat:'mount',name:'Cinderphoenix',rarity:'Legendary',emoji:'🦅',chance:18,blurb:'A phoenix reborn in the Emberwood fire. Magnificent, territorial, nearly untameable.',mechanic:'Mount (Large). Flying 80ft. Rider immune to fire damage while mounted. Encounter: 18%.',link:'View Mount'},
+     {cat:'subclass',name:'Circle of the Emberwood',rarity:'Patron',emoji:'🌿',blurb:'A druidic circle fusing fire and nature magic, born from survivors of the burning.',mechanic:'At 2nd level, Wild Shape forms deal +1d4 fire damage on hit. You cannot be extinguished.',link:'View Subclass'}
+   ]},
+  {id:'coppervein',label:'Coppervein Depths',type:'Underground Mine',cx:160,cy:565,isBoss:false,free:true,
+   classTip:'Artificers, Rogues, Druids — underground specialists',
+   flavor:'Miles of flooded tunnels once rich with ore — now rich with things that eat miners.',
+   encounters:['1–2  Vein Beetle Swarm','3  Deep Ore Golem (triggered by torchlight)','4–5  Tunnel Wraith cluster (3)','6  Copperscale Serpent guarding a cache'],
+   lootRolls:['Pickaxe of Dowsing (Common)','18 gp in scattered coins','Veinseeker Compass (Uncommon)','Flooded lockbox — key inside','Golem fragment — 8 gp','Lantern of Last Shifts, cracked'],
+   content:[
+     {cat:'treasure',name:'Copper Ore Cache',rarity:'Common',emoji:'🪙',blurb:'A sealed mine cart, derailed and half-submerged. The ore inside is still valuable.',mechanic:'Contains 18 gp. Strength (Athletics) DC 12 to pry open.',link:'View in Repository'},
+     {cat:'treasure',name:'Foreman\'s Lockbox',rarity:'Uncommon',emoji:'📦',blurb:'A brass-banded lockbox from the last shift supervisor, still sealed.',mechanic:'Contains 22 gp, a payroll ledger (valuable to historians), and a Golem activation shard.',link:'View in Repository'},
+     {cat:'item',name:'Pickaxe of Dowsing',rarity:'Common',emoji:'⛏',blurb:"A miner's pickaxe with lodestone worked into the handle. Tugs toward metal.",mechanic:'Sense metal ore within 30ft as a bonus action. Does not detect worked metal.',link:'View Item'},
+     {cat:'item',name:'Lantern of Last Shifts',rarity:'Very Rare',emoji:'🔦',blurb:"A miner's lantern not extinguished in forty years. The flame is no longer fire.",mechanic:'Sheds light only the wielder can see. Others see only darkness. Recharges at midnight.',link:'View Item'},
+     {cat:'item',name:'Veinseeker Compass',rarity:'Uncommon',emoji:'🧭',blurb:'A brass compass that spins toward the nearest vein of precious metal.',mechanic:'Points toward the largest concentration of ore within 120ft. Ignores worked metals.',link:'View Item'},
+     {cat:'item',name:'Ore-Touched Gauntlets',rarity:'Rare',emoji:'🥊',blurb:'Gauntlets lined with compressed ore dust from the deepest shafts.',mechanic:'Unarmed strikes deal 1d8 bludgeoning + 1d4 force damage. Advantage on Strength (Athletics).',link:'View Item'},
+     {cat:'spell',name:'Earthen Tongue',rarity:'Common',emoji:'🪨',blurb:"A dwarven miners' spell spread through mountain trade routes.",mechanic:'Communicate with stone surfaces 10 minutes. Learn the last significant event witnessed.',link:'View Spell'},
+     {cat:'spell',name:'Vein Sense',rarity:'Rare',emoji:'🔮',blurb:'An artificer spell that reveals the structural skeleton of the earth.',mechanic:'Detect ore, traps, and constructs within 60ft for 10 minutes. Concentration.',link:'View Spell'},
+     {cat:'flora',name:'Ironmoss',rarity:'Uncommon',emoji:'🌿',blurb:'Grey-green moss on load-bearing walls deep underground. Ferrous to the touch.',mechanic:'Applied as poultice: repairs non-magical armour by 1d4 AC equivalent for 24 hours.',link:'View Flora'},
+     {cat:'flora',name:'Blind Root',rarity:'Common',emoji:'🫚',blurb:'A pale tuber that grows without light, absorbing minerals from stone.',mechanic:'Brewed (1 hour): Darkvision 60ft for 1 hour.',link:'View Flora'},
+     {cat:'flora',name:'Null Mushroom',rarity:'Rare',emoji:'🍄',blurb:'Grows in complete darkness, absorbing residual magic from the ore veins.',mechanic:'Consumed: suppresses magical tracking and scrying for 4 hours.',link:'View Flora'},
+     {cat:'familiar',name:'Ore-Nose Mole',rarity:'Common',emoji:'🐾',blurb:"A mole adapted to deep tunnels whose snout detects mineral deposits.",mechanic:'Familiar. Pinpoint any non-magical metal within 60ft as an action.',link:'View Familiar'},
+     {cat:'familiar',name:'Vein Sprite',rarity:'Rare',emoji:'💎',blurb:'A tiny construct-adjacent spirit that inhabits ore-rich tunnels. Curious, mercurial.',mechanic:'Familiar. Can identify any ore or mineral by touch. Advantage on saves vs. earth/stone effects.',link:'View Familiar'},
+     {cat:'subclass',name:'Artificer: Veinwright Specialisation',rarity:'Patron',emoji:'⚙',blurb:'An artificer tradition merging golem-craft with geological lore.',mechanic:'At 3rd level, infusions can target stone and ore objects. Animate an Ore Golem 1/day.',link:'View Subclass'}
+   ]},
+  {id:'ashveil',label:'Ashveil Pass',type:'Mountain Pass',cx:180,cy:262,isBoss:false,free:false,
+   classTip:'Rangers, Barbarians, Rogues — survivalists',
+   flavor:'A choked corridor of wind-blasted stone where ash never settles and cold cuts through iron plate.',
+   encounters:['1–2  Ashwing Harpy patrol (3)','3–4  Stone Crawler nest (2d4)','5  Wandering Veilborn Specter','6  Merchant ambush — Molten Revenant disguised'],
+   lootRolls:['Cloak of Cinders (Uncommon)','2d10 gp + ash-glass trinket','Ashen Brand, partially buried','Harpy feather — wind spell component','Nothing — site scavenged','Ember-glass pendant'],
+   content:[
+     {cat:'treasure',name:'Buried Saddlebag',rarity:'Common',emoji:'🪙',blurb:'Half-buried in ash. The leather is brittle but the contents survived.',mechanic:'Contains 12 gp and a crude map of upper pass routes.',link:'View in Repository'},
+     {cat:'treasure',name:'Ember-Glass Pendant',rarity:'Uncommon',emoji:'💠',blurb:'A pendant of glass formed from superheated ash. Glows faintly orange in cold weather.',mechanic:'While worn, advantage on Constitution saves against extreme cold environments.',link:'View in Repository'},
+     {cat:'item',name:'Cloak of Cinders',rarity:'Uncommon',emoji:'🧥',blurb:'Woven from compressed ash, treated with fireproof resin. Sheds faint grey smoke.',mechanic:'Advantage on Stealth in ashfall or smoke. Resistance to fire damage from natural sources.',link:'View Item'},
+     {cat:'item',name:"Pass-Warden's Mail",rarity:'Rare',emoji:'🛡',blurb:'Armour worn by the last warden who patrolled this pass. Still bears the sigil.',mechanic:'Medium armour, AC 15. Advantage on Perception checks at altitude. Immune to being knocked prone by wind.',link:'View Item'},
+     {cat:'item',name:'Ashen Brand',rarity:'Rare',emoji:'🔱',blurb:'A ritual brand carried by pass wardens, used to mark safe camp sites.',mechanic:'Once per day, mark a 10ft radius as Warded. Creatures hostile to the bearer have disadvantage on Stealth within it.',link:'View Item'},
+     {cat:'spell',name:'Ashveil',rarity:'Uncommon',emoji:'💨',blurb:'Used by pass wardens to cover retreats or signal distress.',mechanic:'Creates a 20ft cloud of superheated ash. Lightly obscured. Entering deals 1d4 fire damage.',link:'View Spell'},
+     {cat:'spell',name:'Cinder Step',rarity:'Common',emoji:'👣',blurb:'A ranger trick: walk through ash without leaving tracks.',mechanic:'Leave no tracks for 1 hour. Additionally, advantage on Stealth while moving through ashfall.',link:'View Spell'},
+     {cat:'flora',name:'Scorchbloom',rarity:'Rare',emoji:'🌺',blurb:'Blooms only hours after ashfall. Petals are warm and faintly luminescent.',mechanic:'Applied within 1 minute of injury: heals 2d6 HP. No effect on old wounds.',link:'View Flora'},
+     {cat:'familiar',name:'Cinderwing Bat',rarity:'Uncommon',emoji:'🦇',blurb:'A bat with heat-hardened wing edges, near-impervious to flame.',mechanic:'Familiar. Advantage on Perception checks in complete darkness.',link:'View Familiar'},
+     {cat:'familiar',name:'Ashen Marmot',rarity:'Common',emoji:'🐿',blurb:'A stocky rodent that lives in the ash drifts, impervious to heat.',mechanic:'Familiar. Senses ashfall and lava flow changes within 120ft. Alerts you to incoming hazards.',link:'View Familiar'},
+     {cat:'mount',name:'Cindermane Elk',rarity:'Rare',emoji:'🦌',chance:35,blurb:"A massive elk whose mane and antlers are permanently aflame.",mechanic:'Mount (Large). Speed 60ft. Melee attacks deal +1d6 fire damage while mounted. Encounter: 35%.',link:'View Mount'},
+     {cat:'subclass',name:'Path of the Cinderborn',rarity:'Patron',emoji:'🔥',blurb:'A Barbarian path taken by those who survived the pass.',mechanic:'At 3rd level, while Raging: shed bright light 10ft, deal +1d4 fire damage on hit.',link:'View Subclass'}
+   ]},
+  {id:'summit',label:'The Frozen Throne',type:'Summit — Boss Temple',cx:548,cy:182,isBoss:true,free:false,
+   bossName:'KARRETH THE UNTHAWED',bossType:'Corrupted Automaton — Tier V',
+   classTip:'Paladins, Clerics, Wizards — those who court ancient power',
+   flavor:'The peak is impossible. The cold there has a name. Three expeditions went up. The fourth sent down notes.',
+   encounters:['1  Permafrost Wraith (solo)','2–3  Glacial Titan patrol (2)','4  Iceborn Herald + 2 Wraiths','5–6  Summit storm — 10ft visibility, reroll at disadvantage'],
+   lootRolls:['Fragment of the Summit (Rare)','35 gp frozen chest','Iceborn Herald bracer','Crown of the Last Winter, half-buried','Nothing — wind took it','Frostglass shard'],
+   content:[
+     {cat:'treasure',name:'Frozen Offering Chest',rarity:'Uncommon',emoji:'❄',blurb:'A stone chest embedded in ice near the altar, tribute from a forgotten kingdom.',mechanic:'Contains 35 gp and a Frostglass shard (spell component, 15 gp).',link:'View in Repository'},
+     {cat:'treasure',name:"Karreth's Core Fragment",rarity:'Legendary',emoji:'💠',blurb:'A shard of the automaton\'s original power core, impossibly dense and faintly warm despite the summit cold.',mechanic:'Legendary component. Required for crafting three specific artifacts. Cannot be destroyed by mundane means.',link:'View in Repository'},
+     {cat:'item',name:'Fragment of the Summit',rarity:'Rare',emoji:'💎',blurb:'A shard of the peak itself, impossibly cold. Does not melt.',mechanic:'Spellcasting focus for cold spells. Cold spells cast through it deal +1d6 damage.',link:'View Item'},
+     {cat:'item',name:'Frostglass Blade',rarity:'Very Rare',emoji:'🗡',blurb:'Forged from ice that predates the mountain. It has never been warm.',mechanic:'Deals cold damage. Critical hit: DC 15 Con save or restrained until end of next turn.',link:'View Item'},
+     {cat:'item',name:'Crown of the Last Winter',rarity:'Legendary',emoji:'👑',blurb:'A crown of permanent ice that has never melted, worn by a forgotten ruler who ascended the peak and never came down.',mechanic:'Attunement. Immunity to cold damage. Can cast Ice Storm 1/day without spell slot. Charisma +2.',link:'View Item'},
+     {cat:'item',name:'Vow of the Summit',rarity:'Legendary',emoji:'📜',blurb:'A scroll inscribed with the oath sworn to Karreth\'s original creators. Still binding.',mechanic:'Reading it aloud: bound to the mountain for 1 year. Cannot leave the range but gain advantage on all checks within it.',link:'View Item'},
+     {cat:'spell',name:'Glacial Mantle',rarity:'Rare',emoji:'🧊',blurb:'A defensive spell developed by the Iceborn Heralds to protect Karreth.',mechanic:'AC +3 for 1 minute. Creatures striking you in melee take 1d4 cold damage.',link:'View Spell'},
+     {cat:'spell',name:'Breath of the Throne',rarity:'Very Rare',emoji:'🌬',blurb:'The signature attack of the Iceborn Heralds — a focused exhalation of absolute cold.',mechanic:'60ft cone, 8d6 cold damage. DC 16 Con save or restrained for 1 round.',link:'View Spell'},
+     {cat:'flora',name:"Last Winter's Bloom",rarity:'Legendary',emoji:'🌸',blurb:'Blooms at the summit once per century. Smells of cold air and old grief.',mechanic:'Consumed: resistance to cold damage for 8 hours.',link:'View Flora'},
+     {cat:'familiar',name:'Frostfeather Raven',rarity:'Uncommon',emoji:'🐦',blurb:'A raven whose feathers are edged with frost. Speaks only the last three words it heard.',mechanic:'Familiar. Once per day, repeat any sentence spoken within 60ft in the last 24 hours.',link:'View Familiar'},
+     {cat:'familiar',name:'Stormcrest Imp',rarity:'Rare',emoji:'😈',blurb:'A small devil that got caught in a summit storm and never left. Permanently frozen in disposition.',mechanic:'Familiar. Can cast Gust of Wind once per day. Advantage on Stealth in snowfall or fog.',link:'View Familiar'},
+     {cat:'mount',name:'Stormcrest Gryphon',rarity:'Legendary',emoji:'🦅',chance:60,blurb:'The apex predator of the summit. Never been tamed. Scholars say it cannot be.',mechanic:'Mount (Large). Flying 90ft. Encounter: 60%. DC 20 Animal Handling to approach.',link:'View Mount'},
+     {cat:'subclass',name:'Oath of the Summit',rarity:'Patron',emoji:'⚔',blurb:"A Paladin oath sworn to the mountain itself — not to any god.",mechanic:'At 3rd level, Divine Smite deals cold damage. Immune to ice/snow difficult terrain.',link:'View Subclass'}
+   ]},
+  {id:'moltenflank',label:'Molten Flank',type:'Volcanic Ridge',cx:930,cy:262,isBoss:false,free:false,
+   classTip:'Druids, Sorcerers, Fighters — drawn to elemental force',
+   flavor:'The eastern slope where the mountain bleeds. Hot enough to soften iron, cool enough to give you hope.',
+   encounters:['1–2  Ember Lizard pack (2d6)','3–4  Lava Sprite cluster (2d4)','5  Forgeborn Colossus, wandering','6  Magma Hound alpha + 3 pups'],
+   lootRolls:['Scoria Flask (Uncommon)','22 gp lava-fused coins','Slag-Iron Shield, still hot','Drake egg — viable','Forgeborn fragment — magical ore','Ember Warden Amulet, cracked'],
+   content:[
+     {cat:'treasure',name:'Lava-Fused Cache',rarity:'Common',emoji:'🌋',blurb:'A coin pouch half-melted into a lava shelf. Fused but still legal tender.',mechanic:'Contains 22 gp. DC 10 Sleight of Hand to separate coins.',link:'View in Repository'},
+     {cat:'treasure',name:'Drake Egg',rarity:'Rare',emoji:'🥚',blurb:'A viable Cinderback Drake egg, still warm from the volcanic rock it was nestled in.',mechanic:'Can be sold for 50 gp, or incubated for 30 days to produce a Cinderback Drake hatchling (familiar).',link:'View in Repository'},
+     {cat:'item',name:'Scoria Flask',rarity:'Uncommon',emoji:'⚗',blurb:'A flask of volatile scoria extract. The glass is warm. Do not drop.',mechanic:'Thrown (range 30ft): 3d6 fire damage in 10ft radius. DC 13 Dex save for half.',link:'View Item'},
+     {cat:'item',name:'Ember Warden Amulet',rarity:'Very Rare',emoji:'📿',blurb:'Worn by wardens who once patrolled this slope before the Forgeborn drove them off.',mechanic:'Fire resistance. Once per day, absorb a fire attack as a reaction and deal it back on next hit.',link:'View Item'},
+     {cat:'item',name:'Slag-Iron Shield',rarity:'Rare',emoji:'🛡',blurb:'Forged from lava-cooled slag by a Forgeborn defector. Still radiates faint heat.',mechanic:'+1 Shield. While wielding it, you are immune to fire damage from lava and volcanic terrain.',link:'View Item'},
+     {cat:'item',name:'Forgeborn Shard',rarity:'Uncommon',emoji:'⚙',blurb:'A fragment of a Forgeborn Colossus, still faintly animated.',mechanic:'Can be used as an arcane focus. Once per day, cast Heat Metal without using a spell slot.',link:'View Item'},
+     {cat:'spell',name:'Eruption Step',rarity:'Uncommon',emoji:'💥',blurb:'Born from watching the Lava Sprites move — each step a small detonation.',mechanic:'When you Dash, leave a 5ft lava pool at origin. Entering deals 1d6 fire damage.',link:'View Spell'},
+     {cat:'spell',name:'Magma Form',rarity:'Very Rare',emoji:'🌊',blurb:'A druidic Wild Shape variant that channels the mountain itself.',mechanic:'Wild Shape into a Lava Elemental (CR 5). Lasts 1 hour. Cannot be used twice per day.',link:'View Spell'},
+     {cat:'flora',name:'Heatvine',rarity:'Uncommon',emoji:'🌿',blurb:'Grows along active lava flows, storing heat in its leaves.',mechanic:'Fire resistance for 1 hour. Expires 1 hour after harvesting.',link:'View Flora'},
+     {cat:'flora',name:'Magma Cap Fungus',rarity:'Rare',emoji:'🍄',blurb:'A heat-adapted fungus that grows on the underside of lava shelves.',mechanic:'Consumed: immunity to difficult terrain caused by lava or volcanic rock for 4 hours.',link:'View Flora'},
+     {cat:'familiar',name:'Ember Lizard Hatchling',rarity:'Common',emoji:'🦎',blurb:"A newly hatched Ember Lizard, before it develops fire breath.",mechanic:'Familiar. Senses temperature changes within 60ft. Alerts to fire-based hazards.',link:'View Familiar'},
+     {cat:'familiar',name:'Cinderback Dragonet',rarity:'Very Rare',emoji:'🐉',blurb:'A juvenile Cinderback Drake, barely large enough to perch on a shoulder.',mechanic:'Familiar. Can breathe a 5ft line of fire (1d6 damage) once per day. Immune to fire.',link:'View Familiar'},
+     {cat:'mount',name:'Cinderback Drake',rarity:'Rare',emoji:'🐉',chance:20,blurb:'A young drake whose spine ridges glow from volcanic minerals.',mechanic:'Mount (Large). Speed 50ft, Climb 40ft. +1d8 fire damage on charge. Encounter: 20%.',link:'View Mount'},
+     {cat:'subclass',name:'Circle of the Magma',rarity:'Patron',emoji:'🌊',blurb:'A druidic circle that abandoned the idea of nature as green and gentle.',mechanic:'At 2nd level, Wild Shape forms move through lava without damage. Attacks deal +1d6 fire.',link:'View Subclass'}
+   ]},
+  {id:'gearedgod',label:'Temple of the Geared God',type:'Boss Temple',cx:908,cy:538,isBoss:true,free:false,
+   bossName:'VORRETH THE UNCLOCKED',bossType:'Corrupted Automaton — Tier III',
+   classTip:'Artificers, Wizards, Rogues — those who understand mechanisms',
+   flavor:'The temple predates the mountain itself. The gears still turn. Something inside kept them turning.',
+   encounters:['1–2  Gear Sentinel pair','3  Brass Devourer, newly awakened','4–5  The Hollow Priests (3)','6  Wound-Spring Golem — full combat'],
+   lootRolls:['Automaton Key Fragment (Rare)','28 gp from offering box',"Gearwright's Sigil, pulsing",'Oil Flower cluster — 3 doses','Hollow Priest robe','The Unfinished Key — one tooth missing'],
+   content:[
+     {cat:'treasure',name:'Temple Offering Box',rarity:'Uncommon',emoji:'📦',blurb:'A brass box bolted to the altar, filled with offerings left by the Hollow Priests.',mechanic:'Contains 28 gp. Thieves Tools DC 14 to open without triggering the alarm.',link:'View in Repository'},
+     {cat:'treasure',name:"Vorreth's Recall Gear",rarity:'Legendary',emoji:'⚙',blurb:"A gear from Vorreth's core memory system. Spinning it plays back fragments of the temple's founding.",mechanic:'Legendary component. Expend it to cast Legend Lore targeting the temple or Vorreth. Single use.',link:'View in Repository'},
+     {cat:'item',name:'Automaton Key Fragment',rarity:'Rare',emoji:'🗝',blurb:'One of five fragments needed for the Master Key. Still warm.',mechanic:'Glows within 100ft of another fragment. Required for the Vorreth unlock sequence.',link:'View Item'},
+     {cat:'item',name:'The Unfinished Key',rarity:'Legendary',emoji:'🔑',blurb:'The Master Key, nearly complete. Every gear in the temple spins faster when held.',mechanic:'Opens every mechanical lock in the temple. Used in the final phase of the Vorreth encounter.',link:'View Item'},
+     {cat:'item',name:"Gearwright's Sigil",rarity:'Very Rare',emoji:'🔩',blurb:'The badge of office for a Gearwright priest. Still pulsing with residual clockwork magic.',mechanic:'Attunement. Constructs of CR 3 or lower are friendly toward the bearer. Advantage on Arcana involving constructs.',link:'View Item'},
+     {cat:'item',name:'Oiled Wrappings of the Devoted',rarity:'Rare',emoji:'🧣',blurb:'Ritual wrappings worn by the Hollow Priests during temple maintenance. Smells of machine oil.',mechanic:'While wearing, Thieves Tools checks are made with advantage. You can pick locks as a bonus action.',link:'View Item'},
+     {cat:'spell',name:'Gearlock',rarity:'Uncommon',emoji:'⚙',blurb:'Developed within the temple to immobilise constructs for maintenance.',mechanic:'Paralyse one construct or machine within 60ft until end of your next turn. No save.',link:'View Spell'},
+     {cat:'spell',name:'Clockwork Shell',rarity:'Rare',emoji:'🤖',blurb:'Summons a clockwork guardian from the temple\'s reserve systems.',mechanic:'Summon a Gear Sentinel (CR 3 construct) for 10 minutes. It acts on your initiative.',link:'View Spell'},
+     {cat:'flora',name:'Oil Flower',rarity:'Uncommon',emoji:'🌼',blurb:'Grows in temple floor cracks, feeding on machine oil seepage.',mechanic:'Applied to lock, trap, or construct: advantage on Thieves Tools checks for 1 hour.',link:'View Flora'},
+     {cat:'flora',name:'Gear-Moss',rarity:'Rare',emoji:'🌿',blurb:'A metallic moss that grows on gears, absorbing kinetic energy as sustenance.',mechanic:'Feeding it to a construct as an action allows that construct to regain 2d8 HP (short rest equivalent).',link:'View Flora'},
+     {cat:'familiar',name:'Brass Mote',rarity:'Uncommon',emoji:'✨',blurb:'A tiny animate brass sphere that escaped the temple. It seems to be learning.',mechanic:'Familiar. Advantage on Investigation checks involving mechanisms.',link:'View Familiar'},
+     {cat:'familiar',name:'Clockwork Scarab',rarity:'Rare',emoji:'🪲',blurb:'An ancient construct the size of a fist. Pre-dates Vorreth by centuries.',mechanic:'Familiar. Can interface with mechanical locks. Once per day, cast Knock without spell slot.',link:'View Familiar'},
+     {cat:'subclass',name:'Artificer: Gearwright Subclass',rarity:'Patron',emoji:'🔧',blurb:"Reverse-engineered from the Geared God's construction principles.",mechanic:'At 3rd level, animate a Gear Sentinel as a bonus action 1/day. Lasts until destroyed.',link:'View Subclass'}
+   ]},
+  {id:'ashenhollows',label:'The Ashen Hollows',type:'Blighted Caverns',cx:738,cy:640,isBoss:false,free:false,
+   classTip:'Rogues, Warlocks, Monks — comfortable in darkness',
+   flavor:'Where the mountain exhales. Hollow chambers of hardened ash, littered with what the volcano forgot to bury.',
+   encounters:['1  Hollow Wraith (echo of a soul)','2–3  Ash Ghoul pack (2d4)','4  Cinder Basilisk — petrification risk','5–6  Collapsed tunnel — survival encounter'],
+   lootRolls:['Cinder Shard Dagger (Common)','9 gp from ash-buried skeleton','Hollow Echo Stone (Uncommon)','Ghost Mushroom — 4 doses','Shroud of the Ashen, torn','Basilisk eye — alchemical component'],
+   content:[
+     {cat:'treasure',name:'Ash-Buried Skeleton',rarity:'Common',emoji:'💀',blurb:'A skeleton half-emerged from hardened ash flow. Died mid-run.',mechanic:'Contains 9 gp and a ring that detects as magical but has no discernible effect.',link:'View in Repository'},
+     {cat:'treasure',name:'Petrified Merchant',rarity:'Rare',emoji:'🗿',blurb:'A merchant fully petrified by the Cinder Basilisk. Still carrying their pack.',mechanic:'Pack contains 45 gp, three potions of healing, and a Hollow Echo Stone. Requires DC 14 Strength to remove pack.',link:'View in Repository'},
+     {cat:'item',name:'Hollow Echo Stone',rarity:'Uncommon',emoji:'🪨',blurb:'Repeats the last sound made near it when struck.',mechanic:'Struck as an action: replay last 6 seconds of sound in vicinity. Range 30ft.',link:'View Item'},
+     {cat:'item',name:'Shroud of the Ashen',rarity:'Rare',emoji:'🧣',blurb:"Worn by the Ash Ghouls' former priests. Absorbed so much ash it has become part of it.",mechanic:'Advantage on Stealth in ash, smoke, underground. Immune to Blinded from ash or smoke.',link:'View Item'},
+     {cat:'item',name:'Basilisk Lens Monocle',rarity:'Very Rare',emoji:'🔭',blurb:'Ground from a Cinder Basilisk eye by a blind monk who survived the encounter.',mechanic:'Attunement. Immune to the Petrified condition. Once per day, attempt to petrify a creature within 30ft (DC 15 Con save).',link:'View Item'},
+     {cat:'item',name:'Cinder Shard Dagger',rarity:'Common',emoji:'🗡',blurb:'A dagger knapped from a single piece of hardened ash-glass. Chips but holds an edge.',mechanic:'1d4 piercing damage. On a critical hit, the shard breaks off in the wound (1d4 ongoing bleed damage until removed).',link:'View Item'},
+     {cat:'spell',name:'Ashwalk',rarity:'Uncommon',emoji:'👣',blurb:'Passed between Ashwalker rogues of the Hollows.',mechanic:'Move through ash, loose earth, or debris without tracks or triggering pressure traps. 1 hour.',link:'View Spell'},
+     {cat:'spell',name:'Hollow Scream',rarity:'Rare',emoji:'😱',blurb:'The battle cry of the Ash Ghouls — a sound that bypasses ears entirely.',mechanic:'30ft radius fear aura. DC 14 Wisdom save or frightened for 1 minute.',link:'View Spell'},
+     {cat:'flora',name:'Ghost Mushroom',rarity:'Uncommon',emoji:'🍄',blurb:'Translucent, grows in total darkness. Bioluminescent when disturbed.',mechanic:'Consumed raw: Invisibility for 10 minutes. Expires 4 hours after harvesting.',link:'View Flora'},
+     {cat:'flora',name:'Voidmoss',rarity:'Rare',emoji:'🌑',blurb:'A jet-black moss that grows in ash pockets, absorbing magical residue from trapped souls.',mechanic:'Applied to skin: suppresses magical tracking and scrying for 4 hours.',link:'View Flora'},
+     {cat:'familiar',name:'Cave Skink',rarity:'Common',emoji:'🦎',blurb:'A translucent lizard adapted to the lightless hollows. Can see heat signatures.',mechanic:'Familiar. Grants advantage on Perception checks based on heat or movement in darkness.',link:'View Familiar'},
+     {cat:'familiar',name:'Ash Wisp',rarity:'Uncommon',emoji:'🌫',blurb:'A small cloud of animate ash. Possibly a soul. Probably not. Probably.',mechanic:'Familiar. Passes through cracks and under doors. Extinguishes non-magical flames within 5ft.',link:'View Familiar'},
+     {cat:'subclass',name:'Roguish Archetype: Ashwalker',rarity:'Patron',emoji:'🌑',blurb:"They don't hide in shadows. They become them.",mechanic:'At 3rd level, move through ash or smoke without penalty. Cannot be tracked.',link:'View Subclass'}
+   ]},
+  {id:'stonewardenruins',label:'Stonewarden Ruins',type:'Ancient Fortification',cx:548,cy:692,isBoss:true,free:false,
+   bossName:'THE WARDEN UNBROKEN',bossType:'Corrupted Automaton — Tier I',
+   classTip:'Fighters, Clerics, Historians — seekers of ancient power',
+   flavor:'The oldest structure on the mountain. The walls still hold. The thing inside still patrols.',
+   encounters:['1  Stone Sentry (lone patrol)','2–3  Rubble Crawler nest (2d6)','4  Warden Ghost — non-combat, informative','5  Trap room — DC 16 or 4d10 damage','6  The Warden Unbroken awakens — boss fight'],
+   lootRolls:['Warden Fragment (Uncommon)','24 gp mixed with rubble','Stone Sigil Token (Rare)',"Warden's Sealring",'Crackstone Vine — holds 800 lbs','Tablet of the First Fortress (Legendary)'],
+   content:[
+     {cat:'treasure',name:'Ruin Cache',rarity:'Common',emoji:'🪙',blurb:'A stone alcove behind a false wall, sealed with the original Stonewarden wax stamp.',mechanic:'Contains 24 gp. DC 12 Investigation to find. DC 14 History to read the stamp.',link:'View in Repository'},
+     {cat:'treasure',name:'Warden Keystone',rarity:'Very Rare',emoji:'🔑',blurb:'The key to the sealed vault beneath the ruins. It vibrates faintly when near the vault entrance.',mechanic:'Opens the Sealed Vault (hidden location, patron content). Contains three legendary items.',link:'View in Repository'},
+     {cat:'item',name:'Stone Sigil Token',rarity:'Rare',emoji:'🔮',blurb:'A carved disc bearing the Stonewarden sigil. Constructs in the ruins treat bearer as neutral.',mechanic:'Constructs in ruins will not attack the bearer. Does not affect The Warden Unbroken.',link:'View Item'},
+     {cat:'item',name:'Tablet of the First Fortress',rarity:'Legendary',emoji:'📜',blurb:'Stone tablet inscribed with the Stonewarden founding principles. The last page is missing.',mechanic:'Reading in full (1 hour): permanent Comprehend Languages for dead languages only.',link:'View Item'},
+     {cat:'item',name:"Warden's Sealring",rarity:'Very Rare',emoji:'💍',blurb:'The ring of office of the last Stonewarden Commander. The seal is still unbroken.',mechanic:'Attunement. Command word orders Stonewarden constructs of CR 5 or lower (DC 16 Wis save to resist).',link:'View Item'},
+     {cat:'item',name:'Warden Fragment',rarity:'Uncommon',emoji:'🪨',blurb:'A fragment of the Warden Unbroken\'s outer shell, chipped off during a previous incursion.',mechanic:'Can be used as a material component. Grants +2 to AC for one casting of Mage Armor.',link:'View Item'},
+     {cat:'spell',name:'Stone Voice',rarity:'Uncommon',emoji:'🗿',blurb:'From the Warden order, used to commune with ancient stonework.',mechanic:'Speak with stone surfaces 10 minutes. These ruins answer in verse.',link:'View Spell'},
+     {cat:'spell',name:"Warden's Vigil",rarity:'Rare',emoji:'⚔',blurb:'The combat doctrine of the Stonewarden order, recovered from the inscribed tablets.',mechanic:'Adopt a sentinel stance. Attack any creature that passes within 10ft of you as a reaction. Lasts 1 minute.',link:'View Spell'},
+     {cat:'flora',name:'Crackstone Vine',rarity:'Uncommon',emoji:'🌿',blurb:'Grows through cracks in ancient stone, drawing minerals from mortar.',mechanic:'Functions as rope. Holds 800 lbs. Cannot be cut by non-magical slashing weapons.',link:'View Flora'},
+     {cat:'flora',name:'Ruin Moss',rarity:'Common',emoji:'🌱',blurb:'Soft grey moss on shaded stones. Slightly medicinal.',mechanic:'Applied to a wound: heals 1d4 HP. 1 action to apply.',link:'View Flora'},
+     {cat:'flora',name:'Memory Fern',rarity:'Very Rare',emoji:'🌿',blurb:'Grows only in places where great violence occurred. Absorbs residual memory from the stones.',mechanic:'Consumed (10 minute ritual): recover a memory or vision relevant to the location. DM discretion.',link:'View Flora'},
+     {cat:'familiar',name:'Ruin Sprite',rarity:'Uncommon',emoji:'🧿',blurb:'A tiny spirit bound to the ruins, trying to maintain what remains.',mechanic:'Familiar. Advantage on History in ruins. Can locate hidden doors within 30ft.',link:'View Familiar'},
+     {cat:'familiar',name:'Stone Familiar',rarity:'Rare',emoji:'🗿',blurb:'A small animated stone fragment that separated from the Warden Unbroken during an early incursion.',mechanic:'Familiar. AC 16. Immune to poison and psychic damage. Can communicate basic structural information about stone structures.',link:'View Familiar'},
+     {cat:'mount',name:'Stone Drake',rarity:'Rare',emoji:'🐉',chance:12,blurb:"A drake roosting in the ruins so long its hide has become stone-like.",mechanic:'Mount (Large). Speed 40ft, Climb 40ft. Natural AC 18. Encounter: 12%.',link:'View Mount'},
+     {cat:'subclass',name:'Fighter: Warden Reborn Archetype',rarity:'Patron',emoji:'🛡',blurb:'A Fighter who internalised the Stonewarden combat doctrine.',mechanic:'At 3rd level, when you take the Dodge action you can make one weapon attack as a bonus action.',link:'View Subclass'}
+   ]}
+];
+
+function toggleCat(hid,bid){
+  const h=document.getElementById(hid),b=document.getElementById(bid);
+  if(!h||!b)return;
+  const open=b.classList.contains('open');
+  b.classList.toggle('open',!open);h.classList.toggle('open',!open);
+}
+function toggleItem(rid,did){
+  const r=document.getElementById(rid),d=document.getElementById(did);
+  if(!r||!d)return;
+  const open=d.classList.contains('open');
+  d.classList.toggle('open',!open);r.classList.toggle('open',!open);
+}
+function renderItemCard(item,zid){
+  if(!item||!item.name)return '';
+  const safe=item.name.replace(/[^a-zA-Z0-9]/g,'_');
+  const rid=`row-${zid}-${safe}`,did=`det-${zid}-${safe}`;
+  const rar=item.chance?`${item.rarity} · ${item.chance}% encounter`:item.rarity;
+  return `<div class="item-row" id="${rid}">
+    <button class="item-row-btn" onclick="toggleItem('${rid}','${did}')">
+      <div class="item-thumb">${item.emoji}</div>
+      <div class="item-info"><span class="item-name">${item.name}</span><span class="item-rar" style="color:${rc(item.rarity)}">${rar}</span></div>
+      <div class="item-chevron">▶</div>
+    </button>
+  </div>
+  <div class="item-detail" id="${did}">
+    <div class="item-detail-inner">
+      <div class="item-img">${item.emoji}</div>
+      <div class="item-blurb">${item.blurb}</div>
+      <div class="item-mechanic">${item.mechanic}</div>
+      <div class="item-cta"><div class="item-link">${item.link} ↗</div></div>
+    </div>
+  </div>`;
+}
+function renderCatSection(label,items,cat,zid,delay){
+  if(!items||!items.length)return '';
+  const hid=`ch-${zid}-${cat}`,bid=`cb-${zid}-${cat}`;
+  return fa(`<div class="cat-header" id="${hid}" onclick="toggleCat('${hid}','${bid}')">
+    <span class="cat-icon">${ICONS[cat]||'◆'}</span>
+    <span class="cat-title">${label}</span>
+    <span class="cat-count">${items.length}</span>
+    <span class="cat-chevron">▶</span>
+  </div>
+  <div class="cat-body" id="${bid}">${items.map(x=>renderItemCard(x,zid)).join('')}</div>`,delay);
+}
+function renderPanel(z,tier){
+  const isLocked=!z.free&&tier==='free';
+  const q=rand(NPC[z.id]||NPC.ashveil);
+  if(isLocked){
+    return [fa(`<div class="ph"><div class="ph-name">${z.label}</div><div class="ph-type">${z.type}</div></div>`,0),fa(`<div class="ph-flavor">${z.flavor}</div>`,28),fa(`<div class="npc-quote"><div class="npc-text">"${q.q}"</div><div class="npc-attr">${q.a}</div></div>`,46),fa(`<div class="locked-zone-wall"><div class="lzw-icon">🔒</div><div class="lzw-title">Patron Region</div><div class="lzw-text">This region's full content is unlocked for Dungeon Strugglers patrons.</div><div class="lzw-btn">Unlock on Patreon ↗</div></div>`,64)].join('');
+  }
+  const boss=z.isBoss?fa(`<div class="boss-block"><div style="font-size:9px;color:var(--red-dim);font-family:'Cinzel',serif;letter-spacing:0.1em;margin-bottom:4px;font-weight:600;">BOSS TEMPLE</div><div class="boss-name">${z.bossName}</div><div class="boss-sub">${z.bossType}</div></div>`,58):'';
+  const bycat=c=>z.content.filter(x=>x.cat===c&&x.name);
+  const CAT_ORDER=[{cat:'treasure',label:'Treasure & Loot'},{cat:'item',label:'Magic Items'},{cat:'spell',label:'Spells'},{cat:'flora',label:'Flora & Forage'},{cat:'familiar',label:'Familiars'},{cat:'mount',label:'Legendary Mount'},{cat:'subclass',label:'Subclass Unlock'}];
+  return [
+    fa(`<div class="ph"><div class="ph-name">${z.label}</div><div class="ph-type">${z.type}</div></div>`,0),
+    fa(`<div class="ph-flavor">${z.flavor}</div>`,26),
+    fa(`<div class="npc-quote"><div class="npc-text">"${q.q}"</div><div class="npc-attr">${q.a}</div></div>`,44),
+    fa(`<div class="class-tip"><div class="class-tip-text"><strong>Best for:</strong> ${z.classTip}</div></div>`,60),
+    boss,
+    fa(`<div class="roll-row"><button class="roll-btn" id="rbenc-${z.id}" onclick="doRoll('enc','${z.id}')"><span class="rbicon">⚔</span>Roll encounter</button><button class="roll-btn" id="rbloot-${z.id}" onclick="doRoll('loot','${z.id}')"><span class="rbicon">◈</span>Roll loot</button></div>`,75),
+    `<div id="rollres-${z.id}"></div>`,
+    ...CAT_ORDER.map((c,i)=>renderCatSection(c.label,bycat(c.cat),c.cat,z.id,95+i*18))
+  ].join('');
+}
+function renderWaypointPanel(wp){
+  return [
+    fa(`<div class="wp-panel-head"><div class="wp-panel-icon">◆</div><div class="wp-panel-name">${wp.label}</div><div class="wp-panel-type">${wp.type}</div></div>`,0),
+    fa(`<div class="wp-panel-desc">${wp.desc}</div>`,28),
+    fa(`<div class="wp-event-list"><div class="wp-event-label">Encounter Table — d6</div>${wp.events.map(e=>`<div class="wp-event-row"><div class="wp-event-num">${e.n}</div><div class="wp-event-text">${e.t}</div></div>`).join('')}</div>`,46),
+    fa(`<div class="wp-check-wrap"><div class="wp-check-label">Skill Checks</div>${wp.checks.map(c=>`<div class="wp-check-row"><span class="wp-check-badge">${c.badge}</span><span class="wp-check-text">${c.text}</span></div>`).join('')}</div>`,62)
+  ].join('');
+}
+function doRoll(type,zid){
+  const z=ZONES.find(x=>x.id===zid),el=document.getElementById('rollres-'+zid);
+  const be=document.getElementById('rbenc-'+zid),bl=document.getElementById('rbloot-'+zid);
+  if(!el||!z)return;
+  if(be)be.disabled=true;if(bl)bl.disabled=true;
+  const label=type==='enc'?'Encounter — d6':'Loot — d6';
+  el.innerHTML=`<div class="rr"><div class="rr-inner"><div class="rr-label">${label}</div><div class="rr-pending">Rolling...</div></div></div>`;
+  setTimeout(()=>{
+    const arr=type==='enc'?z.encounters:z.lootRolls;
+    const result=arr[Math.floor(Math.random()*arr.length)];
+    el.innerHTML=`<div class="rr"><div class="rr-inner roll-result-anim"><div class="rr-label">${label}</div><div class="rr-text">${result}</div></div></div>`;
+    if(be)be.disabled=false;if(bl)bl.disabled=false;
+  },620);
+}
+function renderOverview(){
+  const q=rand(OV_NPC);
+  return [
+    fa(`<div class="ov-hero"><div class="ov-title">Mount Molomo</div><div class="ov-desc">A vast and hostile range at the edge of the Sheercliff Setting. Ancient, corrupted, and very much alive.</div></div>`,0),
+    fa(`<div class="npc-quote"><div class="npc-text">"${q.q}"</div><div class="npc-attr">${q.a}</div></div>`,20),
+    fa(`<div class="ov-stat-grid"><div class="ov-stat"><div class="ov-stat-num">8</div><div class="ov-stat-lbl">Regions</div></div><div class="ov-stat"><div class="ov-stat-num">4</div><div class="ov-stat-lbl">Waypoints</div></div><div class="ov-stat"><div class="ov-stat-num">50+</div><div class="ov-stat-lbl">Magic items</div></div><div class="ov-stat"><div class="ov-stat-num">6</div><div class="ov-stat-lbl">Mounts</div></div></div>`,40),
+    fa(`<div class="ov-free-tag"><div class="ov-free-label">Free regions</div><span class="free-badge">Emberwood Grove</span><span class="free-badge">Coppervein Depths</span></div>`,58),
+    fa(`<div class="ov-cat"><div class="ov-cat-label">✦ Items</div><div class="ov-pill-wrap"><span class="ov-pill">Ashwood Staff</span><span class="ov-pill">Pickaxe of Dowsing</span><span class="ov-pill">Glowing Seedpod</span><span class="ov-pill locked">+45 Patron</span></div></div>`,74),
+    fa(`<div class="ov-cat"><div class="ov-cat-label">✶ Spells</div><div class="ov-pill-wrap"><span class="ov-pill">Embersong</span><span class="ov-pill">Earthen Tongue</span><span class="ov-pill locked">+10 Patron</span></div></div>`,90),
+    fa(`<div class="ov-cat"><div class="ov-cat-label">❋ Subclasses</div><div class="ov-pill-wrap"><span class="ov-pill">Circle of the Emberwood</span><span class="ov-pill locked">+6 Patron</span></div></div>`,106),
+    fa(`<div class="ov-cat"><div class="ov-cat-label">⬡ Mounts</div><div class="ov-pill-wrap"><span class="ov-pill">Cinderphoenix</span><span class="ov-pill locked">+5 Patron</span></div></div>`,118),
+    fa(`<div class="ov-cat"><div class="ov-cat-label">◆ Waypoints</div><div class="ov-pill-wrap"><span class="ov-pill">Ashfall Crossing</span><span class="ov-pill">Drowned Shaft</span><span class="ov-pill">Ember Crossing</span><span class="ov-pill">Warden's Last Mark</span></div></div>`,130),
+    fa(`<div class="gate-full"><div class="gate-title">Unlock the full mountain</div><div class="gate-text">6 more regions, 50+ items, 8 subclasses, 3 boss temples, legendary mounts and all hidden content.</div><div class="gate-btn">Become a Patron ↗</div></div>`,148)
+  ].join('');
+}
+function setTier(t){
+  currentTier=t;
+  document.getElementById('btn-free').classList.toggle('active',t==='free');
+  document.getElementById('btn-patron').classList.toggle('active',t==='patron');
+  updateMarkers();
+  if(currentId&&currentType==='zone'){const z=ZONES.find(x=>x.id===currentId);if(z){const ps=document.getElementById('panelScroll');ps.innerHTML=renderPanel(z,t);ps.scrollTop=0;}}
+  else if(!currentId){showOverview();}
+}
+function updateMarkers(){
+  ZONES.forEach(z=>{const g=document.getElementById('zm-'+z.id);if(g)g.classList.toggle('locked-zone',!z.free&&currentTier==='free');});
+}
+function buildMarkers(){
+  const g=document.getElementById('markers'),ns='http://www.w3.org/2000/svg';
+  ZONES.forEach(z=>{
+    const b=z.isBoss,grp=document.createElementNS(ns,'g');
+    grp.setAttribute('id','zm-'+z.id);grp.setAttribute('class','zone-marker'+(b?' boss':''));
+    if(b){const p=document.createElementNS(ns,'circle');p.setAttribute('cx',z.cx);p.setAttribute('cy',z.cy);p.setAttribute('r','26');p.setAttribute('fill','none');p.setAttribute('stroke','#6a1a0a');p.setAttribute('stroke-width','0.9');p.setAttribute('opacity','0.18');p.setAttribute('class','zm-pulse');grp.appendChild(p);}
+    const or=document.createElementNS(ns,'circle');or.setAttribute('cx',z.cx);or.setAttribute('cy',z.cy);or.setAttribute('r','21');or.setAttribute('fill','none');or.setAttribute('stroke',b?'#6a1a0a':'#5a3a1a');or.setAttribute('stroke-width','1');or.setAttribute('opacity','0.28');or.setAttribute('class','zm-ring-outer');grp.appendChild(or);
+    const ir=document.createElementNS(ns,'circle');ir.setAttribute('cx',z.cx);ir.setAttribute('cy',z.cy);ir.setAttribute('r','13');ir.setAttribute('fill','none');ir.setAttribute('stroke',b?'#6a1a0a':'#5a3a1a');ir.setAttribute('stroke-width','1.5');ir.setAttribute('opacity','0.55');ir.setAttribute('class','zm-ring-inner');grp.appendChild(ir);
+    const bg=document.createElementNS(ns,'circle');bg.setAttribute('cx',z.cx);bg.setAttribute('cy',z.cy);bg.setAttribute('r','11');bg.setAttribute('fill',b?'#f0e2cc':'#e8d8b0');bg.setAttribute('stroke',b?'#6a1a0a':'#5a3a1a');bg.setAttribute('stroke-width',b?'1.9':'1.5');bg.setAttribute('class','zm-bg');grp.appendChild(bg);
+    if(b){const t=document.createElementNS(ns,'path');t.setAttribute('d',`M ${z.cx-3.8} ${z.cy+2.2} L ${z.cx} ${z.cy-4.8} L ${z.cx+3.8} ${z.cy+2.2} Z`);t.setAttribute('fill','#6a1a0a');t.setAttribute('opacity','0.85');t.setAttribute('class','zm-dot');grp.appendChild(t);}
+    else{const d=document.createElementNS(ns,'circle');d.setAttribute('cx',z.cx);d.setAttribute('cy',z.cy);d.setAttribute('r','4');d.setAttribute('fill','#5a3a1a');d.setAttribute('opacity','0.8');d.setAttribute('class','zm-dot');grp.appendChild(d);}
+    const lbl=document.createElementNS(ns,'text');lbl.setAttribute('x',z.cx);lbl.setAttribute('y',z.cy+29);lbl.setAttribute('text-anchor','middle');lbl.setAttribute('font-family',"'Cinzel',serif");lbl.setAttribute('font-size','10.5');lbl.setAttribute('fill',b?'#4a1a0a':'#4a2e14');lbl.setAttribute('font-weight',b?'700':'600');lbl.setAttribute('letter-spacing','0.04em');lbl.setAttribute('opacity','0.65');lbl.setAttribute('class','zm-label');lbl.textContent=z.label;grp.appendChild(lbl);
+    grp.addEventListener('click',e=>{
+      e.stopPropagation();
+      document.querySelectorAll('.zone-marker,.wp-marker').forEach(m=>m.classList.remove('active'));
+      document.querySelectorAll('.wp-inner').forEach(i=>{i.setAttribute('fill','transparent');i.setAttribute('opacity','0');});
+      grp.classList.add('active');currentId=z.id;currentType='zone';
+      const ps=document.getElementById('panelScroll');ps.innerHTML=renderPanel(z,currentTier);ps.scrollTop=0;
+    });
+    g.appendChild(grp);
+  });
+}
+let tooltipTimer=null;
+function buildWaypoints(){
+  const g=document.getElementById('waypoints'),ns='http://www.w3.org/2000/svg';
+  const tt=document.getElementById('wpTooltip');
+  WAYPOINTS.forEach(wp=>{
+    const grp=document.createElementNS(ns,'g');
+    grp.setAttribute('id','wp-'+wp.id);grp.setAttribute('class','wp-marker');
+    const sz=11,isz=4;
+    const d=document.createElementNS(ns,'polygon');
+    d.setAttribute('points',`${wp.cx},${wp.cy-sz} ${wp.cx+sz},${wp.cy} ${wp.cx},${wp.cy+sz} ${wp.cx-sz},${wp.cy}`);
+    d.setAttribute('fill','#c9a84c');d.setAttribute('stroke','#8a6020');d.setAttribute('stroke-width','1.2');d.setAttribute('opacity','0.78');d.setAttribute('class','wp-diamond');
+    grp.appendChild(d);
+    const inner=document.createElementNS(ns,'polygon');
+    inner.setAttribute('points',`${wp.cx},${wp.cy-isz} ${wp.cx+isz},${wp.cy} ${wp.cx},${wp.cy+isz} ${wp.cx-isz},${wp.cy}`);
+    inner.setAttribute('fill','transparent');inner.setAttribute('opacity','0');inner.setAttribute('class','wp-inner');
+    grp.appendChild(inner);
+    const lbl=document.createElementNS(ns,'text');
+    lbl.setAttribute('x',wp.cx);lbl.setAttribute('y',wp.cy+26);lbl.setAttribute('text-anchor','middle');
+    lbl.setAttribute('font-family',"'Cinzel',serif");lbl.setAttribute('font-size','9.5');lbl.setAttribute('fill','#7a6020');
+    lbl.setAttribute('font-weight','600');lbl.setAttribute('letter-spacing','0.04em');lbl.setAttribute('opacity','0.58');lbl.setAttribute('class','wp-label');
+    lbl.textContent=wp.label;grp.appendChild(lbl);
+    grp.addEventListener('mouseenter',()=>{
+      inner.setAttribute('fill','#d8d0c0');inner.setAttribute('opacity','0.8');
+      if(tooltipTimer)clearTimeout(tooltipTimer);
+      const wrap=document.getElementById('mapWrap');
+      const wrapRect=wrap.getBoundingClientRect();
+      const canvas=document.getElementById('mapCanvas');
+      const mat=new DOMMatrixReadOnly(window.getComputedStyle(canvas).transform);
+      const scale=mat.a||1;
+      const sx=wp.cx*scale+mat.e;
+      const sy=wp.cy*scale+mat.f;
+      document.getElementById('wptTitle').textContent=wp.label;
+      document.getElementById('wptText').textContent=wp.tooltip;
+      const DIAMOND_TOP_Y=(sy-wrapRect.top)-(sz*scale);
+      const TAIL_H=10,GAP=8;
+      tt.style.left=(sx-wrapRect.left)+'px';
+      tt.style.bottom='auto';
+      tt.style.top=(DIAMOND_TOP_Y-TAIL_H-GAP)+'px';
+      tt.style.transform='translateX(-50%) translateY(-100%)';
+      tt.classList.remove('visible');
+      void tt.offsetWidth;
+      tt.classList.add('visible');
+    });
+    grp.addEventListener('mouseleave',()=>{
+      if(!grp.classList.contains('active')){inner.setAttribute('fill','transparent');inner.setAttribute('opacity','0');}
+      tooltipTimer=setTimeout(()=>tt.classList.remove('visible'),160);
+    });
+    grp.addEventListener('click',e=>{
+      e.stopPropagation();
+      tt.classList.remove('visible');
+      document.querySelectorAll('.wp-inner').forEach(i=>{i.setAttribute('fill','transparent');i.setAttribute('opacity','0');});
+      document.querySelectorAll('.zone-marker,.wp-marker').forEach(m=>m.classList.remove('active'));
+      grp.classList.add('active');
+      inner.setAttribute('fill','#3a3530');inner.setAttribute('opacity','0.85');
+      currentId=wp.id;currentType='waypoint';
+      const ps=document.getElementById('panelScroll');ps.innerHTML=renderWaypointPanel(wp);ps.scrollTop=0;
+    });
+    g.appendChild(grp);
+  });
+}
+function showOverview(){
+  document.querySelectorAll('.zone-marker,.wp-marker').forEach(m=>m.classList.remove('active'));
+  document.querySelectorAll('.wp-inner').forEach(i=>{i.setAttribute('fill','transparent');i.setAttribute('opacity','0');});
+  currentId=null;currentType=null;
+  const ps=document.getElementById('panelScroll');ps.innerHTML=renderOverview();ps.scrollTop=0;
+}
+buildMarkers();buildWaypoints();updateMarkers();showOverview();
+(function(){
+  const wrap=document.getElementById('mapWrap'),canvas=document.getElementById('mapCanvas'),hint=document.getElementById('mapHint');
+  const SCALE=1.42;
+  const SVG_W=Math.round(1100*SCALE), SVG_H=Math.round(880*SCALE);
+  let pan=false,sx=0,sy=0,tx=0,ty=0,didMove=false;
+
+  function clamp(){
+    const ww=wrap.clientWidth,wh=wrap.clientHeight;
+    tx=Math.max(Math.min(0,ww-SVG_W),Math.min(0,tx));
+    ty=Math.max(Math.min(0,wh-SVG_H),Math.min(0,ty));
+  }
+  function apply(){
+    canvas.style.transform=`translate(${tx}px,${ty}px) scale(${SCALE})`;
+  }
+
+  // Start panned to the heart of the mountain (roughly centre-upper)
+  tx=-(SVG_W-wrap.clientWidth)*0.50;
+  ty=-(SVG_H-wrap.clientHeight)*0.44;
+  clamp();apply();
+
+  wrap.addEventListener('mousedown',e=>{
+    if(e.target.closest('.zone-marker')||e.target.closest('.wp-marker'))return;
+    pan=true;didMove=false;sx=e.clientX-tx;sy=e.clientY-ty;
+    wrap.style.cursor='grabbing';
+    if(hint)hint.style.opacity='0';
+  });
+  window.addEventListener('mousemove',e=>{
+    if(!pan)return;
+    const nx=e.clientX-sx,ny=e.clientY-sy;
+    if(Math.abs(nx-tx)>3||Math.abs(ny-ty)>3)didMove=true;
+    tx=nx;ty=ny;clamp();apply();
+  });
+  window.addEventListener('mouseup',()=>{pan=false;wrap.style.cursor='grab';});
+  wrap.addEventListener('click',e=>{
+    if(e.target.closest('.zone-marker')||e.target.closest('.wp-marker'))return;
+    if(didMove){didMove=false;return;}
+    showOverview();
+  });
+  wrap.addEventListener('touchstart',e=>{
+    if(e.touches.length!==1)return;
+    pan=true;didMove=false;
+    sx=e.touches[0].clientX-tx;sy=e.touches[0].clientY-ty;
+    if(hint)hint.style.opacity='0';
+  },{passive:true});
+  wrap.addEventListener('touchmove',e=>{
+    if(!pan||e.touches.length!==1)return;
+    const nx=e.touches[0].clientX-sx,ny=e.touches[0].clientY-sy;
+    if(Math.abs(nx-tx)>3||Math.abs(ny-ty)>3)didMove=true;
+    tx=nx;ty=ny;clamp();apply();e.preventDefault();
+  },{passive:false});
+  wrap.addEventListener('touchend',()=>{pan=false;});
+  setTimeout(()=>{if(hint)hint.style.opacity='0';},4000);
+})();
+</script>
+</body>
+</html>
