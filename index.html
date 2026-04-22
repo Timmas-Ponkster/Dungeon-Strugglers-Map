@@ -104,9 +104,9 @@ body{background:#111;font-family:'Spectral',Georgia,serif;}
 .map-wrap.map-dark .zone-marker.boss.active .zm-bg{fill:#d04020 !important;}
 .map-wrap.map-dark .wp-diamond{fill:#e8c050 !important;stroke:#c09030 !important;}
 
-@keyframes tooltipRise{from{opacity:0;transform:translateX(-50%) translateY(8px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
-.wp-tooltip{position:absolute;pointer-events:none;z-index:100;display:none;transform:translateX(-50%);}
-.wp-tooltip.visible{display:block;animation:tooltipRise 0.5s cubic-bezier(0.22,0.8,0.4,1) forwards;}
+@keyframes tooltipRise{from{opacity:0;transform:translateX(-50%) translateY(6px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
+.wp-tooltip{position:absolute;pointer-events:none;z-index:100;display:none;}
+.wp-tooltip.visible{display:block;animation:tooltipRise 0.45s cubic-bezier(0.22,0.8,0.4,1) forwards;}
 .wpt-outer{position:relative;filter:drop-shadow(0 3px 10px rgba(0,0,0,0.5));}
 .wpt-box{background:var(--panel-deep);border:1.5px solid #6a5430;border-radius:6px;padding:11px 14px 10px;min-width:192px;max-width:215px;position:relative;}
 .wpt-tail{width:20px;height:10px;display:block;margin:0 auto;overflow:visible;}
@@ -764,28 +764,33 @@ function buildWaypoints(){
     grp.addEventListener('mouseenter',()=>{
       inner.setAttribute('fill','#d8d0c0');inner.setAttribute('opacity','0.8');
       if(tooltipTimer)clearTimeout(tooltipTimer);
-      const wrap=document.getElementById('mapWrap');
-      const wrapRect=wrap.getBoundingClientRect();
-      const canvas=document.getElementById('mapCanvas');
-      const mat=new DOMMatrixReadOnly(window.getComputedStyle(canvas).transform);
-      const scale=mat.a||1;
-      const sx=wp.cx*scale+mat.e;
-      const sy=wp.cy*scale+mat.f;
       document.getElementById('wptTitle').textContent=wp.label;
       document.getElementById('wptText').textContent=wp.tooltip;
-      const DIAMOND_TOP_Y=(sy-wrapRect.top)-(sz*scale);
-      const TAIL_H=10,GAP=8;
-      tt.style.left=(sx-wrapRect.left)+'px';
+      // Correct approach: getBoundingClientRect() on the actual rendered SVG element
+      // gives real screen position accounting for all transforms. Then subtract
+      // mapWrap's rect to get wrap-local coords for absolute positioning.
+      const wrap=document.getElementById('mapWrap');
+      const wrapRect=wrap.getBoundingClientRect();
+      const dRect=d.getBoundingClientRect();
+      const canvas=document.getElementById('mapCanvas');
+      const mat=new DOMMatrixReadOnly(window.getComputedStyle(canvas).transform);
+      const S=1.42;
+      const left = wp.cx * S + mat.e;
+      const top  = (wp.cy - 120) * S + mat.f;
+      tt.style.left=left+'px';
+      tt.style.top=top+'px';
       tt.style.bottom='auto';
-      tt.style.top=(DIAMOND_TOP_Y-TAIL_H-GAP)+'px';
-      tt.style.transform='translateX(-50%) translateY(-100%)';
+      tt.style.transform='translateX(-50%)';
       tt.classList.remove('visible');
       void tt.offsetWidth;
       tt.classList.add('visible');
     });
     grp.addEventListener('mouseleave',()=>{
       if(!grp.classList.contains('active')){inner.setAttribute('fill','transparent');inner.setAttribute('opacity','0');}
-      tooltipTimer=setTimeout(()=>tt.classList.remove('visible'),160);
+      tooltipTimer=setTimeout(()=>{
+        tt.classList.remove('visible');
+        tt.style.display='';
+      },160);
     });
     grp.addEventListener('click',e=>{
       e.stopPropagation();
